@@ -1,6 +1,6 @@
-// Package config parses the YAML file that selects the stoa binary's outbound
-// adapters at boot. Read by cmd/stoa only; domain and adapter packages must
-// not import it. See config.example.yaml for the full shape.
+// Package config parses the YAML file that selects the bookkeeping CLI's
+// outbound adapters at boot. Domain and adapter packages must not import it.
+// See config.example.yaml for the full shape.
 package config
 
 import (

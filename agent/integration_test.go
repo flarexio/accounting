@@ -12,15 +12,15 @@ import (
 	"github.com/flarexio/stoa/llm/openai"
 )
 
-// TestAgent_OpenAI hits the real OpenAI API; gated by STOA_RUN_OPENAI_TESTS so
+// TestAgent_OpenAI hits the real OpenAI API; gated by ACCOUNTING_RUN_OPENAI_TESTS so
 // `go test ./...` never silently spends tokens even with OPENAI_API_KEY set.
 func TestAgent_OpenAI(t *testing.T) {
-	if os.Getenv("STOA_RUN_OPENAI_TESTS") == "" {
-		t.Skip("set STOA_RUN_OPENAI_TESTS=1 to run OpenAI integration tests")
+	if os.Getenv("ACCOUNTING_RUN_OPENAI_TESTS") == "" {
+		t.Skip("set ACCOUNTING_RUN_OPENAI_TESTS=1 to run OpenAI integration tests")
 	}
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Fatal("STOA_RUN_OPENAI_TESTS is set but OPENAI_API_KEY is empty")
+		t.Fatal("ACCOUNTING_RUN_OPENAI_TESTS is set but OPENAI_API_KEY is empty")
 	}
 
 	scenario, repo := awsBillScenario(t)

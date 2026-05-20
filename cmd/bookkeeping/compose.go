@@ -22,7 +22,7 @@ import (
 	pgrepo "github.com/flarexio/accounting/persistence/postgres"
 )
 
-// loadBookConfig reads config.yaml from dir, or ~/.flarex/stoa when empty; missing is an error.
+// loadBookConfig reads config.yaml from dir, or ~/.flarex/accounting when empty; missing is an error.
 func loadBookConfig(dir string) (*config.Config, error) {
 	if dir == "" {
 		def, err := config.DefaultDir()

@@ -379,7 +379,7 @@ func (m model) View() tea.View {
 	var content string
 	switch {
 	case !m.ready:
-		content = "Starting Stoa TUI…"
+		content = "Starting accounting TUI..."
 	case m.err != nil:
 		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
 			footerStyle.Render("ctrl+c quit")
@@ -395,7 +395,7 @@ func (m model) View() tea.View {
 
 func (m model) selectView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Stoa — choose an agent + scenario"))
+	b.WriteString(titleStyle.Render("Accounting - choose an agent + scenario"))
 	b.WriteString("\n\n")
 	for i, opt := range m.options {
 		cursor := "  "

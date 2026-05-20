@@ -1,0 +1,37 @@
+# Local-only infrastructure for manually running accounting book-run against
+# real NATS JetStream + Postgres. Containers are ephemeral by default
+# (no named volumes) so `docker compose down` returns to a clean slate.
+#
+# Bring up:
+#   docker compose up -d
+#   migrate -path persistence/postgres/migrations \
+#           -database "postgres://stoa:stoa@localhost:5432/accounting?sslmode=disable" up
+#
+# Tear down:
+#   docker compose down
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: stoa
+      POSTGRES_PASSWORD: stoa
+      POSTGRES_DB: accounting
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stoa -d accounting"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

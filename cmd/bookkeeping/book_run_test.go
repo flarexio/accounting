@@ -16,17 +16,18 @@ import (
 
 func awsBillPath(t *testing.T) string {
 	t.Helper()
-	return filepath.Join("..", "..", "testdata", "accounting", "aws_bill.json")
+	return filepath.Join("..", "..", "testdata", "aws_bill.json")
 }
 
 const inProcessConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n"
 
-// seedConfigBody points $HOME at a tempdir and writes config.yaml at ~/.flarex/stoa/.
+// seedConfigBody points $HOME/$USERPROFILE at a tempdir and writes config.yaml at ~/.flarex/accounting/.
 func seedConfigBody(t *testing.T, body string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	dir := filepath.Join(home, ".flarex", "stoa")
+	t.Setenv("USERPROFILE", home)
+	dir := filepath.Join(home, ".flarex", "accounting")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir default config dir: %v", err)
 	}
@@ -47,12 +48,13 @@ func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	return home
 }
 
 func runBookCLI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	app := newApp(stdout, stderr)
-	full := append([]string{"stoa", "book-run"}, args...)
+	full := append([]string{"accounting", "book-run"}, args...)
 	return app.Run(ctx, full)
 }
 
@@ -271,9 +273,9 @@ func TestRunBook_WorkDirMissingConfigYAML(t *testing.T) {
 }
 
 func TestRunBook_DefaultDirLoaded(t *testing.T) {
-	// A bad config at ~/.flarex/stoa/ -- the bad-kind error proves the fallback fired.
+	// A bad config at ~/.flarex/accounting/ -- the bad-kind error proves the fallback fired.
 	home := isolateHome(t)
-	cfgDir := filepath.Join(home, ".flarex", "stoa")
+	cfgDir := filepath.Join(home, ".flarex", "accounting")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatalf("mkdir default config dir: %v", err)
 	}
@@ -298,7 +300,7 @@ func TestRunBook_DefaultDirMissingErrors(t *testing.T) {
 	args := []string{awsBillPath(t), "--request", "x"}
 	err := runBookCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("expected error when default ~/.flarex/stoa/config.yaml is missing")
+		t.Fatal("expected error when default ~/.flarex/accounting/config.yaml is missing")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "config") {
 		t.Errorf("error should mention config, got %v", err)

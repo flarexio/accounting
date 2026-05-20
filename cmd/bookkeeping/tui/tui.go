@@ -1,5 +1,5 @@
-// Package tui is the Bubble Tea conversational front-end for Stoa. It is
-// pure presentation: cmd/stoa composes the agents and injects them as Options.
+// Package tui is the Bubble Tea conversational front-end for accounting. It is
+// pure presentation: cmd/bookkeeping composes the agents and injects them as Options.
 package tui
 
 import (

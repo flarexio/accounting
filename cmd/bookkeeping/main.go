@@ -1,4 +1,4 @@
-// Command stoa is the demo CLI for Stoa's vertical slices.
+// Command accounting is the bookkeeping CLI.
 package main
 
 import (
@@ -20,8 +20,8 @@ func main() {
 
 func newApp(stdout, stderr io.Writer) *cli.Command {
 	return &cli.Command{
-		Name:      "stoa",
-		Usage:     "demo CLI for the Stoa harness",
+		Name:      "accounting",
+		Usage:     "bookkeeping CLI",
 		Writer:    stdout,
 		ErrWriter: stderr,
 		Commands: []*cli.Command{
