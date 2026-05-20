@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	stoac "github.com/flarexio/stoa/config"
+	"github.com/flarexio/stoa/llm"
 )
 
 // Filename is the fixed config file name inside the accounting work directory.
@@ -45,11 +45,17 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
+// LLM holds the reasoning engine defaults; CLI flags override these.
+type LLM struct {
+	Engine llm.EngineKind `yaml:"engine"`
+	Model  string         `yaml:"model"`
+}
+
 // Config is the decoded representation of config.yaml.
 type Config struct {
 	Persistence Persistence `yaml:"persistence"`
 	Messaging   Messaging   `yaml:"messaging"`
-	LLM         stoac.LLM   `yaml:"llm"`
+	LLM         LLM         `yaml:"llm"`
 }
 
 type Persistence struct {
@@ -108,7 +114,7 @@ func (c *Config) applyDefaults() {
 	}
 
 	if c.LLM.Engine == "" {
-		c.LLM.Engine = stoac.EngineScripted
+		c.LLM.Engine = llm.EngineScripted
 	}
 }
 
@@ -143,8 +149,8 @@ func (c *Config) Validate() error {
 	}
 
 	switch c.LLM.Engine {
-	case stoac.EngineScripted:
-	case stoac.EngineOpenAI:
+	case llm.EngineScripted:
+	case llm.EngineOpenAI:
 		// llm.model is optional at config time; --model can supply it.
 	default:
 		errs = append(errs, fmt.Errorf("llm.engine %q is not supported (scripted|openai)", c.LLM.Engine))

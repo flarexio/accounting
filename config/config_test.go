@@ -8,7 +8,7 @@ import (
 
 	"github.com/flarexio/accounting/config"
 
-	stoac "github.com/flarexio/stoa/config"
+	"github.com/flarexio/stoa/llm"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -39,7 +39,7 @@ func TestLoad_EmptyFileDefaultsToInProcess(t *testing.T) {
 		t.Errorf("messaging default: want inproc, got %q", cfg.Messaging.Kind)
 	}
 
-	if cfg.LLM.Engine != stoac.EngineScripted {
+	if cfg.LLM.Engine != llm.EngineScripted {
 		t.Errorf("llm engine default: want scripted, got %q", cfg.LLM.Engine)
 	}
 }
@@ -52,7 +52,7 @@ func TestLoad_LLMBlockParsed(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.LLM.Engine != stoac.EngineOpenAI {
+	if cfg.LLM.Engine != llm.EngineOpenAI {
 		t.Errorf("llm engine: want openai, got %q", cfg.LLM.Engine)
 	}
 
@@ -82,7 +82,7 @@ func TestLoad_OpenAIEngineDoesNotRequireModel(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.LLM.Engine != stoac.EngineOpenAI || cfg.LLM.Model != "" {
+	if cfg.LLM.Engine != llm.EngineOpenAI || cfg.LLM.Model != "" {
 		t.Errorf("unexpected llm block: %+v", cfg.LLM)
 	}
 }
