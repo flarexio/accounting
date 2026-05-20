@@ -30,9 +30,9 @@ type bookRunOutput struct {
 func newBookRunCommand(stdout io.Writer) *cli.Command {
 	return &cli.Command{
 		Name:      "book-run",
-		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario JSON file.",
-		ArgsUsage: "<scenario.json>",
-		Description: "Loads an accounting scenario JSON file, seeds the configured repository,\n" +
+		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario file (YAML or JSON).",
+		ArgsUsage: "<scenario>",
+		Description: "Loads an accounting scenario file (YAML or JSON; chosen by extension), seeds the configured repository,\n" +
 			"runs the agent.Bookkeeper loop, and prints a JSON report to stdout. The\n" +
 			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
 			"the file must exist (no implicit in-process fallback). The reasoning\n" +
