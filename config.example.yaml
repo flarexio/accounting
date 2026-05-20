@@ -1,0 +1,28 @@
+# Sample stoa configuration. Copy to config.yaml (gitignored) and edit
+# the values for your environment. Every block defaults to the
+# in-process / offline option, so an empty file is also valid -- delete
+# a block to use the default.
+
+persistence:
+  # memory  -> persistence/memory; nothing else needed.
+  # postgres -> persistence/postgres; requires the nested postgres block.
+  kind: postgres
+  postgres:
+    dsn: postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable
+
+messaging:
+  # inproc -> messaging/inproc; nothing else needed.
+  # nats   -> messaging/nats; requires url + stream + consumer. Subjects
+  #           are domain constants (e.g. accounting.journal), not config.
+  kind: nats
+  nats:
+    url: nats://localhost:4222
+    stream: STOA_ACCOUNTING
+    consumer: stoa-book-run
+
+llm:
+  # scripted -> deterministic offline engine; model is ignored.
+  # openai   -> drives a real LLM; needs model + OPENAI_API_KEY.
+  # The --engine / --model CLI flags override this block when set.
+  engine: openai
+  model: gpt-5.4-mini

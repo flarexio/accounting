@@ -1,0 +1,22 @@
+{
+  "name": "aws_bill",
+  "description": "Paying the monthly AWS bill on the company credit card. Two branches share a single ledger; HQ pays this invoice.",
+  "company": {
+    "id": "acme",
+    "name": "Acme Cloud Co."
+  },
+  "accounts": [
+    { "code": "1010", "name": "Cash",                  "type": "asset",     "active": true },
+    { "code": "2100", "name": "Credit Card Payable",   "type": "liability", "active": true },
+    { "code": "5200", "name": "Cloud Hosting Expense", "type": "expense",   "active": true },
+    { "code": "5900", "name": "Legacy Office Rent",    "type": "expense",   "active": false }
+  ],
+  "branches": [
+    { "id": "hq",  "name": "Headquarters" },
+    { "id": "eu",  "name": "Europe"       }
+  ],
+  "periods": [
+    { "id": "2026-04", "start": "2026-04-01T00:00:00Z", "end": "2026-04-30T23:59:59Z", "status": "closed" },
+    { "id": "2026-05", "start": "2026-05-01T00:00:00Z", "end": "2026-05-31T23:59:59Z", "status": "open"   }
+  ]
+}
