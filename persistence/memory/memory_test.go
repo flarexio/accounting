@@ -113,7 +113,7 @@ func TestRepository_LastSequenceTracksPerSubject(t *testing.T) {
 func TestRepository_SeedAndListings(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("../../testdata/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

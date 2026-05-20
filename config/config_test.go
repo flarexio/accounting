@@ -158,13 +158,13 @@ func TestLoad_FullPostgresAndNATS(t *testing.T) {
 	body := `persistence:
   kind: postgres
   postgres:
-    dsn: postgres://stoa@localhost:5432/stoa?sslmode=disable
+    dsn: postgres://stoa:stoa@localhost:5432/accounting?sslmode=disable
 messaging:
   kind: nats
   nats:
     url: nats://localhost:4222
-    stream: STOA_ACCOUNTING
-    consumer: stoa-book-run
+    stream: ACCOUNTING
+    consumer: accounting-book-run
 `
 	path := writeConfig(t, body)
 	cfg, err := config.Load(path)
@@ -176,11 +176,11 @@ messaging:
 		t.Error("DSN should be parsed")
 	}
 
-	if cfg.Messaging.NATS.Stream != "STOA_ACCOUNTING" {
+	if cfg.Messaging.NATS.Stream != "ACCOUNTING" {
 		t.Errorf("stream: got %q", cfg.Messaging.NATS.Stream)
 	}
 
-	if cfg.Messaging.NATS.Consumer != "stoa-book-run" {
+	if cfg.Messaging.NATS.Consumer != "accounting-book-run" {
 		t.Errorf("consumer: got %q", cfg.Messaging.NATS.Consumer)
 	}
 }
@@ -195,13 +195,14 @@ func TestLoad_MissingFile(t *testing.T) {
 func TestDefaultDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	got, err := config.DefaultDir()
 	if err != nil {
 		t.Fatalf("DefaultDir: %v", err)
 	}
 
-	want := filepath.Join(home, ".flarex", "stoa")
+	want := filepath.Join(home, ".flarex", "accounting")
 	if got != want {
 		t.Errorf("DefaultDir: got %q, want %q", got, want)
 	}

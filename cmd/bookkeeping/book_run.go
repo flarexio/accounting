@@ -34,7 +34,7 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		ArgsUsage: "<scenario.json>",
 		Description: "Loads an accounting scenario JSON file, seeds the configured repository,\n" +
 			"runs the agent.Bookkeeper loop, and prints a JSON report to stdout. The\n" +
-			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/stoa;\n" +
+			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
 			"the file must exist (no implicit in-process fallback). The reasoning\n" +
 			"engine and model come from the config.yaml llm block (engine defaults\n" +
 			"to scripted, the deterministic offline engine); --engine and --model\n" +
@@ -71,7 +71,7 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "work-dir",
-				Usage: "stoa work directory (holds config.yaml today, more state later); defaults to ~/.flarex/stoa",
+				Usage: "accounting work directory (holds config.yaml today, more state later); defaults to ~/.flarex/accounting",
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {

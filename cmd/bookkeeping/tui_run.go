@@ -14,7 +14,6 @@ import (
 	"github.com/flarexio/accounting/cmd/bookkeeping/tui"
 	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/harness/loop"
-	"github.com/flarexio/stoa/world"
 
 	bookkeeper "github.com/flarexio/accounting/agent"
 )
@@ -25,11 +24,10 @@ func newTUICommand() *cli.Command {
 		Usage:     "Launch the conversational Bubble Tea terminal UI.",
 		ArgsUsage: "<scenario.json> [scenario.json ...]",
 		Description: "Launches a conversational terminal UI over the same reason -> validate ->\n" +
-			"execute loop the book-run / npc-run commands use. Pass one or more scenario\n" +
-			"JSON files: accounting scenarios become bookkeeper sessions, world scenarios\n" +
-			"become one npc session per actor. Bookkeeper sessions read config.yaml from\n" +
-			"--work-dir (default ~/.flarex/stoa) and connect to a ledger already seeded\n" +
-			"by `stoa seed` -- the TUI never seeds on startup; npc sessions need no config.",
+			"execute loop the book-run command uses. Pass one or more accounting scenario\n" +
+			"JSON files; each becomes a selectable bookkeeper session. Sessions read config.yaml from\n" +
+			"--work-dir (default ~/.flarex/accounting) and connect to a ledger already seeded\n" +
+			"by `accounting seed` -- the TUI never seeds on startup.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "engine",
@@ -56,7 +54,7 @@ func newTUICommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "work-dir",
-				Usage: "stoa work directory holding config.yaml; defaults to ~/.flarex/stoa",
+				Usage: "accounting work directory holding config.yaml; defaults to ~/.flarex/accounting",
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -68,68 +66,47 @@ func newTUICommand() *cli.Command {
 func runTUI(ctx context.Context, c *cli.Command) error {
 	paths := c.Args().Slice()
 	if len(paths) == 0 {
-		return errors.New("tui: provide at least one scenario JSON file (accounting or world)")
+		return errors.New("tui: provide at least one accounting scenario JSON file")
 	}
 
-	// Classify up front so config.yaml is only required when a bookkeeper scenario is present.
 	type classified struct {
-		path   string
-		acc    accounting.Scenario
-		wld    world.Scenario
-		isBook bool
+		path string
+		acc  accounting.Scenario
 	}
 	var items []classified
-	needConfig := false
 	for _, path := range paths {
-		acc, wld, isBook, err := classifyScenario(path)
+		acc, err := accounting.LoadScenarioFile(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("tui: load accounting scenario %s: %w", path, err)
 		}
-		items = append(items, classified{path: path, acc: acc, wld: wld, isBook: isBook})
-		needConfig = needConfig || isBook
+		items = append(items, classified{path: path, acc: acc})
 	}
 
+	cfg, err := loadBookConfig(c.String("work-dir"))
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
 	comp := tuiComposer{
+		cfg:        cfg,
 		engineKind: c.String("engine"),
 		model:      c.String("model"),
 		amount:     int64(c.Int("amount")),
 		currency:   c.String("currency"),
 		maxTurns:   int(c.Int("max-turns")),
 	}
-	if needConfig {
-		cfg, err := loadBookConfig(c.String("work-dir"))
-		if err != nil {
-			return fmt.Errorf("tui: %w", err)
-		}
-		comp.cfg = cfg
-		if comp.engineKind == "" {
-			comp.engineKind = string(cfg.LLM.Engine)
-		}
-		if comp.model == "" {
-			comp.model = cfg.LLM.Model
-		}
+	if comp.engineKind == "" {
+		comp.engineKind = string(cfg.LLM.Engine)
+	}
+	if comp.model == "" {
+		comp.model = cfg.LLM.Model
 	}
 
 	var options []tui.Option
 	for _, it := range items {
-		if it.isBook {
-			options = append(options, comp.bookOption(it.path, it.acc))
-		}
+		options = append(options, comp.bookOption(it.path, it.acc))
 	}
 
 	return tui.Run(ctx, options)
-}
-
-// classifyScenario picks accounting vs world by trial decode (both loaders reject unknown fields).
-func classifyScenario(path string) (accounting.Scenario, world.Scenario, bool, error) {
-	if acc, err := accounting.LoadScenarioFile(path); err == nil {
-		return acc, world.Scenario{}, true, nil
-	}
-	if wld, err := world.LoadScenarioFile(path); err == nil {
-		return accounting.Scenario{}, wld, false, nil
-	}
-	return accounting.Scenario{}, world.Scenario{}, false,
-		fmt.Errorf("tui: %s is not a recognized accounting or world scenario", path)
 }
 
 // tuiComposer turns classified scenarios into tui.Options.
@@ -143,7 +120,7 @@ type tuiComposer struct {
 }
 
 // bookOption is a selectable bookkeeper session; the TUI never seeds, it
-// connects to a ledger already seeded by `stoa seed`.
+// connects to a ledger already seeded by `accounting seed`.
 func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
 	return tui.Option{
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
@@ -167,7 +144,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 			if period.ID == "" {
 				bus.Close()
 				repoCloser.Close()
-				return nil, fmt.Errorf("tui: ledger has no open period; run `stoa seed` first")
+				return nil, fmt.Errorf("tui: ledger has no open period; run `accounting seed` first")
 			}
 			engine, err := buildBookEngine(ctx, comp.engineKind, scenario, repo, comp.amount, comp.currency, comp.model)
 			if err != nil {

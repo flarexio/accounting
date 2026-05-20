@@ -24,13 +24,13 @@ func newSeedCommand(stdout io.Writer) *cli.Command {
 			"a declarative accounting scenario -- company, chart of accounts, branches,\n" +
 			"and periods. Applying it upserts that metadata, so running seed again\n" +
 			"converges to the same state rather than accumulating. The binary reads\n" +
-			"config.yaml from --work-dir, defaulting to ~/.flarex/stoa.\n" +
+			"config.yaml from --work-dir, defaulting to ~/.flarex/accounting.\n" +
 			"\n" +
 			"seed owns data; schema is owned by the out-of-band golang-migrate step.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "work-dir",
-				Usage: "stoa work directory holding config.yaml; defaults to ~/.flarex/stoa",
+				Usage: "accounting work directory holding config.yaml; defaults to ~/.flarex/accounting",
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
