@@ -1,4 +1,4 @@
-// Command accounting is the bookkeeping CLI.
+// Command ledger is the accounting ledger CLI.
 package main
 
 import (
@@ -20,8 +20,8 @@ func main() {
 
 func newApp(stdout, stderr io.Writer) *cli.Command {
 	return &cli.Command{
-		Name:      "accounting",
-		Usage:     "bookkeeping CLI",
+		Name:      "ledger",
+		Usage:     "accounting ledger CLI",
 		Writer:    stdout,
 		ErrWriter: stderr,
 		Commands: []*cli.Command{

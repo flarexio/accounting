@@ -54,7 +54,7 @@ func isolateHome(t *testing.T) string {
 
 func runBookCLI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	app := newApp(stdout, stderr)
-	full := append([]string{"accounting", "book-run"}, args...)
+	full := append([]string{"ledger", "book-run"}, args...)
 	return app.Run(ctx, full)
 }
 

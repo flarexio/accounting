@@ -1,4 +1,4 @@
-// Package config parses the YAML file that selects the bookkeeping CLI's
+// Package config parses the YAML file that selects the ledger CLI's
 // outbound adapters at boot. Domain and adapter packages must not import it.
 // See config.example.yaml for the full shape.
 package config

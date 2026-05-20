@@ -1,4 +1,4 @@
-# Local-only infrastructure for manually running accounting book-run against
+# Local-only infrastructure for manually running ledger book-run against
 # real NATS JetStream + Postgres. Containers are ephemeral by default
 # (no named volumes) so `docker compose down` returns to a clean slate.
 #
