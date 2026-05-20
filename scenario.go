@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,14 +24,21 @@ type Scenario struct {
 	Periods     []Period  `json:"periods" yaml:"periods"`
 }
 
-// LoadScenarioFile reads and decodes a scenario JSON file from disk.
+// LoadScenarioFile reads and decodes a scenario file from disk. The format is
+// chosen by extension: .yaml/.yml use the YAML decoder, anything else (or no
+// extension) uses the JSON decoder.
 func LoadScenarioFile(path string) (Scenario, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Scenario{}, fmt.Errorf("accounting: open scenario %q: %w", path, err)
 	}
 	defer f.Close()
-	return DecodeScenario(f)
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".yaml", ".yml":
+		return DecodeScenarioYAML(f)
+	default:
+		return DecodeScenario(f)
+	}
 }
 
 // DecodeScenario reads a scenario JSON document from r.

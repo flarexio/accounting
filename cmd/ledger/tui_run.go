@@ -22,10 +22,11 @@ func newTUICommand() *cli.Command {
 	return &cli.Command{
 		Name:      "tui",
 		Usage:     "Launch the conversational Bubble Tea terminal UI.",
-		ArgsUsage: "<scenario.json> [scenario.json ...]",
+		ArgsUsage: "<scenario> [scenario ...]",
 		Description: "Launches a conversational terminal UI over the same reason -> validate ->\n" +
 			"execute loop the book-run command uses. Pass one or more accounting scenario\n" +
-			"JSON files; each becomes a selectable bookkeeper session. Sessions read config.yaml from\n" +
+			"files (YAML or JSON; chosen by extension); each becomes a selectable bookkeeper session.\n" +
+			"Sessions read config.yaml from\n" +
 			"--work-dir (default ~/.flarex/accounting) and connect to a ledger already seeded\n" +
 			"by `ledger seed` -- the TUI never seeds on startup.",
 		Flags: []cli.Flag{
@@ -66,7 +67,7 @@ func newTUICommand() *cli.Command {
 func runTUI(ctx context.Context, c *cli.Command) error {
 	paths := c.Args().Slice()
 	if len(paths) == 0 {
-		return errors.New("tui: provide at least one accounting scenario JSON file")
+		return errors.New("tui: provide at least one accounting scenario file (YAML or JSON)")
 	}
 
 	type classified struct {
