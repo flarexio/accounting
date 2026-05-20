@@ -15,7 +15,7 @@ import (
 
 func runSeedCLI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	app := newApp(stdout, stderr)
-	full := append([]string{"accounting", "seed"}, args...)
+	full := append([]string{"ledger", "seed"}, args...)
 	return app.Run(ctx, full)
 }
 

@@ -43,7 +43,7 @@ func DecodeScenario(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// LoadScenarioYAML reads and decodes a YAML seed file (used by `accounting seed`).
+// LoadScenarioYAML reads and decodes a YAML seed file (used by `ledger seed`).
 func LoadScenarioYAML(path string) (Scenario, error) {
 	f, err := os.Open(path)
 	if err != nil {

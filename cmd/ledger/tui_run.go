@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/accounting"
-	"github.com/flarexio/accounting/cmd/bookkeeping/tui"
+	"github.com/flarexio/accounting/cmd/ledger/tui"
 	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/harness/loop"
 
@@ -27,7 +27,7 @@ func newTUICommand() *cli.Command {
 			"execute loop the book-run command uses. Pass one or more accounting scenario\n" +
 			"JSON files; each becomes a selectable bookkeeper session. Sessions read config.yaml from\n" +
 			"--work-dir (default ~/.flarex/accounting) and connect to a ledger already seeded\n" +
-			"by `accounting seed` -- the TUI never seeds on startup.",
+			"by `ledger seed` -- the TUI never seeds on startup.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "engine",
@@ -120,7 +120,7 @@ type tuiComposer struct {
 }
 
 // bookOption is a selectable bookkeeper session; the TUI never seeds, it
-// connects to a ledger already seeded by `accounting seed`.
+// connects to a ledger already seeded by `ledger seed`.
 func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
 	return tui.Option{
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
@@ -144,7 +144,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 			if period.ID == "" {
 				bus.Close()
 				repoCloser.Close()
-				return nil, fmt.Errorf("tui: ledger has no open period; run `accounting seed` first")
+				return nil, fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
 			}
 			engine, err := buildBookEngine(ctx, comp.engineKind, scenario, repo, comp.amount, comp.currency, comp.model)
 			if err != nil {
