@@ -1,0 +1,71 @@
+name: taiwan_ledger
+description: "東昇商貿股份有限公司月結帳:依《商業會計處理準則》標準會計科目表建立的台灣中小企業總帳,涵蓋買賣、勞務與營業外科目,並含 5% 營業稅的進項/銷項稅額與勞健保代收款。2026-03、2026-04 已關帳,2026-05 開帳中。"
+
+company:
+  id: dongsheng
+  name: 東昇商貿股份有限公司
+
+accounts:
+  - { code: "1101", name: 庫存現金, type: asset, active: true }
+  - { code: "1102", name: 零用金, type: asset, active: true }
+  - { code: "1103", name: 銀行存款, type: asset, active: true }
+  - { code: "1131", name: 應收票據, type: asset, active: true }
+  - { code: "1141", name: 應收帳款, type: asset, active: true }
+  - { code: "1151", name: 備抵呆帳, type: asset, active: true }
+  - { code: "1181", name: 其他應收款, type: asset, active: true }
+  - { code: "1211", name: 商品存貨, type: asset, active: true }
+  - { code: "1281", name: 進項稅額, type: asset, active: true }
+  - { code: "1411", name: 預付費用, type: asset, active: true }
+  - { code: "1421", name: 預付貨款, type: asset, active: true }
+  - { code: "1441", name: 存出保證金, type: asset, active: true }
+  - { code: "1611", name: 房屋及建築, type: asset, active: true }
+  - { code: "1621", name: 累計折舊－房屋及建築, type: asset, active: true }
+  - { code: "1631", name: 機器設備, type: asset, active: true }
+  - { code: "1641", name: 累計折舊－機器設備, type: asset, active: true }
+  - { code: "1681", name: 辦公設備, type: asset, active: true }
+  - { code: "2101", name: 短期借款, type: liability, active: true }
+  - { code: "2131", name: 應付票據, type: liability, active: true }
+  - { code: "2141", name: 應付帳款, type: liability, active: true }
+  - { code: "2161", name: 應付費用, type: liability, active: true }
+  - { code: "2171", name: 應付薪資, type: liability, active: true }
+  - { code: "2181", name: 應付營業稅, type: liability, active: true }
+  - { code: "2191", name: 銷項稅額, type: liability, active: true }
+  - { code: "2201", name: 代收款, type: liability, active: true }
+  - { code: "2211", name: 預收貨款, type: liability, active: true }
+  - { code: "2511", name: 長期借款, type: liability, active: true }
+  - { code: "3101", name: 股本, type: equity, active: true }
+  - { code: "3201", name: 資本公積, type: equity, active: true }
+  - { code: "3301", name: 法定盈餘公積, type: equity, active: true }
+  - { code: "3351", name: 未分配盈餘, type: equity, active: true }
+  - { code: "3411", name: 本期損益, type: equity, active: true }
+  - { code: "4101", name: 銷貨收入, type: revenue, active: true }
+  - { code: "4111", name: 銷貨退回及折讓, type: revenue, active: true }
+  - { code: "4201", name: 勞務收入, type: revenue, active: true }
+  - { code: "7101", name: 利息收入, type: revenue, active: true }
+  - { code: "7111", name: 兌換利益, type: revenue, active: true }
+  - { code: "5101", name: 銷貨成本, type: expense, active: true }
+  - { code: "5111", name: 進貨, type: expense, active: true }
+  - { code: "6101", name: 薪資支出, type: expense, active: true }
+  - { code: "6102", name: 租金支出, type: expense, active: true }
+  - { code: "6103", name: 文具用品, type: expense, active: true }
+  - { code: "6104", name: 旅費, type: expense, active: true }
+  - { code: "6106", name: 郵電費, type: expense, active: true }
+  - { code: "6108", name: 廣告費, type: expense, active: true }
+  - { code: "6109", name: 水電瓦斯費, type: expense, active: true }
+  - { code: "6110", name: 保險費, type: expense, active: true }
+  - { code: "6113", name: 折舊, type: expense, active: true }
+  - { code: "6115", name: 交際費, type: expense, active: true }
+  - { code: "6117", name: 雜費, type: expense, active: true }
+  - { code: "7211", name: 利息費用, type: expense, active: true }
+  - { code: "7212", name: 兌換損失, type: expense, active: true }
+  - { code: "6199", name: 其他費用（舊制，停用）, type: expense, active: false }
+
+branches:
+  - { id: hq, name: 台北總公司 }
+  - { id: tc, name: 台中營業所 }
+  - { id: ks, name: 高雄營業所 }
+
+periods:
+  - { id: "2026-03", start: 2026-03-01T00:00:00Z, end: 2026-03-31T23:59:59Z, status: closed }
+  - { id: "2026-04", start: 2026-04-01T00:00:00Z, end: 2026-04-30T23:59:59Z, status: closed }
+  - { id: "2026-05", start: 2026-05-01T00:00:00Z, end: 2026-05-31T23:59:59Z, status: open }
