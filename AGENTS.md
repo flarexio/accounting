@@ -60,10 +60,6 @@ To keep knowing and doing unified, every agent follows this cycle:
 - **No section dividers.** Code organization should show itself.
 - **Treat comment churn as code churn.** Update or remove comments when contracts change.
 
-## Git Commits
-
-- When creating git commits, always include this trailer in the commit message: `Co-authored-by: Codex <codex@openai.com>`
-
 ## Go Commands
 
 - Never place Go build cache inside this repository.
