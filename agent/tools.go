@@ -34,7 +34,7 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 				return "", fmt.Errorf("invalid find_accounts args: %w", err)
 			}
 		}
-		matches, err := accounting.FindAccounts(ctx, repo, accounting.AccountFilter{
+		matches, err := repo.FindAccounts(ctx, accounting.AccountFilter{
 			NameContains: p.NameContains,
 			Type:         accounting.AccountType(strings.TrimSpace(p.Type)),
 			ActiveOnly:   true,

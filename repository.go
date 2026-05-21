@@ -17,6 +17,10 @@ type LedgerRepository interface {
 	Branches(ctx context.Context) ([]Branch, error)
 	Entries(ctx context.Context) ([]JournalEntry, error)
 
+	// FindAccounts searches the chart by filter. Adapters choose the strategy:
+	// substring match, vector similarity, etc.
+	FindAccounts(ctx context.Context, filter AccountFilter) ([]Account, error)
+
 	PutAccount(ctx context.Context, a Account) error
 	PutPeriod(ctx context.Context, p Period) error
 	PutBranch(ctx context.Context, b Branch) error
@@ -27,4 +31,13 @@ type LedgerRepository interface {
 	// LastSequence returns the broker sequence of the most recent applied
 	// JournalPosted on subject, or 0 when none has been seen.
 	LastSequence(ctx context.Context, subject string) (uint64, error)
+}
+
+// AccountFilter narrows the chart of accounts for a FindAccounts query.
+// NameContains is a semantic hint -- adapters may match it via substring,
+// vector similarity, or any other strategy. Type and ActiveOnly are exact.
+type AccountFilter struct {
+	NameContains string
+	Type         AccountType
+	ActiveOnly   bool
 }
