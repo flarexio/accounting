@@ -96,7 +96,10 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	}
 
 	b.WriteString("\nNotes for post_journal:\n")
-	b.WriteString("  - amount is an integer in minor currency units. $100 USD = 10000.\n")
+	b.WriteString("  - amount is an integer in minor currency units per the ISO 4217 exponent.\n")
+	b.WriteString("      no-fraction currencies (TWD, JPY, KRW, ...): whole units, e.g. NT$100 = 100.\n")
+	b.WriteString("      two-decimal currencies (USD, EUR, GBP, ...): cents, e.g. $100 = 10000.\n")
+	b.WriteString("      three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.\n")
 	b.WriteString("  - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.\n")
 	b.WriteString("  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.\n")
 	if toolMode {

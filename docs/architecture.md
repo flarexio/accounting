@@ -48,6 +48,8 @@ Amounts use `int64` minor units so balance checks are exact and never depend on 
 
 `Validator.Validate` joins violations so one feedback cycle can give the model enough information to correct multiple mistakes at once.
 
+Currency precision is deliberately not validated: both `3150` and `315000` are legal `int64` values that balance, so code cannot disambiguate the intended scale from the line alone. The ISO 4217 minor-unit mapping (TWD = exponent 0, USD = 2, BHD = 3, ...) lives in the bookkeeper prompt as judgment, not in the validator as a contract. If a model picks the wrong scale, the entry still posts; this is the documented trade-off behind storing amounts as `int64` minor units.
+
 ## Use Cases
 
 `bookkeeping/` contains application operations with no LLM dependency. A CLI, test, batch job, HTTP handler, or agent can drive them through the same contracts.
