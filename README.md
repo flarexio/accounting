@@ -52,17 +52,17 @@ Run commands from the repository root with `go run ./cmd/ledger`:
 ```bash
 go run ./cmd/ledger seed seed/taiwan_ledger.yaml
 
-go run ./cmd/ledger book-run testdata/aws_bill.json \
-  --request "Paid AWS bill 100 USD using company credit card"
+go run ./cmd/ledger book-run \
+  --request "台北總公司以銀行存款支付中華電信辦公室電話費 NT\$3,150，含 5% 進項稅額 NT\$150。"
 
-go run ./cmd/ledger tui testdata/aws_bill.json
+go run ./cmd/ledger tui
 ```
 
-`seed` applies one YAML seed file, or every `*.yaml` / `*.yml` file in a directory, to the configured repository.
+`seed` applies one YAML/JSON scenario file (or every `*.yaml` / `*.yml` file in a directory) to the configured repository -- the company, chart of accounts, branches, and periods.
 
-`book-run` loads an accounting scenario JSON file, seeds the configured repository, runs the bookkeeping reasoning loop, and prints a JSON report.
+`book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine defaults to the offline scripted demo; switch to `--engine openai --model <model>` (and `OPENAI_API_KEY`) for a real LLM run.
 
-`tui` opens a Bubble Tea terminal UI over one or more accounting scenario JSON files. The TUI expects the ledger to have already been seeded.
+`tui` opens the Bubble Tea terminal UI against the seeded ledger; it is openai-only and takes no arguments.
 
 ## Configuration
 

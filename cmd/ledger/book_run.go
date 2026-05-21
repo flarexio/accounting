@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/urfave/cli/v3"
 
@@ -16,8 +17,6 @@ import (
 )
 
 type bookRunOutput struct {
-	Scenario    string                  `json:"scenario,omitempty"`
-	Description string                  `json:"description,omitempty"`
 	Request     string                  `json:"request"`
 	Turns       int                     `json:"turns"`
 	Intent      bookkeeping.Intent      `json:"intent"`
@@ -29,17 +28,16 @@ type bookRunOutput struct {
 
 func newBookRunCommand(stdout io.Writer) *cli.Command {
 	return &cli.Command{
-		Name:      "book-run",
-		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario file (YAML or JSON).",
-		ArgsUsage: "<scenario>",
-		Description: "Loads an accounting scenario file (YAML or JSON; chosen by extension), seeds the configured repository,\n" +
-			"runs the agent.Bookkeeper loop, and prints a JSON report to stdout. The\n" +
-			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
-			"the file must exist (no implicit in-process fallback). The reasoning\n" +
-			"engine and model come from the config.yaml llm block (engine defaults\n" +
-			"to scripted, the deterministic offline engine); --engine and --model\n" +
-			"override that block when set. The openai engine drives a real LLM\n" +
-			"through the same harness and needs OPENAI_API_KEY.",
+		Name:  "book-run",
+		Usage: "Run a single bookkeeping reasoning cycle against an already-seeded ledger.",
+		Description: "Connects to the ledger seeded by `ledger seed`, runs the agent.Bookkeeper\n" +
+			"loop against --request, and prints a JSON report to stdout. The binary\n" +
+			"reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
+			"the file must exist. The reasoning engine and model come from the\n" +
+			"config.yaml llm block (engine defaults to scripted, the deterministic\n" +
+			"offline engine); --engine and --model override that block when set.\n" +
+			"The openai engine drives a real LLM through the same harness and\n" +
+			"needs OPENAI_API_KEY.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -81,10 +79,6 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 }
 
 func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
-	if c.NArg() == 0 {
-		return errors.New("book-run: scenario path is required")
-	}
-	path := c.Args().First()
 	request := c.String("request")
 	engineKind := c.String("engine")
 	amount := int64(c.Int("amount"))
@@ -106,8 +100,9 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		model = cfg.LLM.Model
 	}
 
-	scenario, err := accounting.LoadScenarioFile(path)
-	if err != nil {
+	// Validate engine config before touching the repo so misconfigured
+	// invocations (unknown engine, missing OPENAI_API_KEY) fail fast.
+	if err := validateBookEngineConfig(engineKind, model); err != nil {
 		return err
 	}
 
@@ -117,16 +112,20 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer repoCloser.Close()
 
-	if err := scenario.Seed(ctx, repo); err != nil {
-		return err
-	}
-
 	period, err := firstOpenPeriod(ctx, repo)
 	if err != nil {
 		return err
 	}
 	if period.ID == "" {
-		return errors.New("book-run: scenario has no open period")
+		return errors.New("book-run: ledger has no open period; run `ledger seed` first")
+	}
+
+	company, ok, err := repo.Company(ctx)
+	if err != nil {
+		return fmt.Errorf("book-run: read company: %w", err)
+	}
+	if !ok {
+		return errors.New("book-run: ledger has no company; run `ledger seed` first")
 	}
 
 	bus, err := buildMessaging(ctx, cfg.Messaging, repo)
@@ -135,7 +134,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, engineKind, scenario.Company, repo, amount, currency, model)
+	engine, err := buildBookEngine(ctx, engineKind, company, repo, amount, currency, model)
 	if err != nil {
 		return err
 	}
@@ -149,8 +148,6 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	res, runErr := agent.Book(ctx, request)
 
 	out := bookRunOutput{
-		Scenario:    scenario.Name,
-		Description: scenario.Description,
 		Request:     request,
 		Turns:       res.Turns,
 		Intent:      res.Intent,
@@ -166,4 +163,23 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return fmt.Errorf("book-run: encode output: %w", err)
 	}
 	return runErr
+}
+
+// validateBookEngineConfig checks engine selection without touching the repo
+// so flag/config errors surface before any repository work.
+func validateBookEngineConfig(engineKind, model string) error {
+	switch engineKind {
+	case "", "scripted":
+		return nil
+	case "openai":
+		if model == "" {
+			return errors.New("book-run: --engine openai requires --model or config.yaml llm.model")
+		}
+		if os.Getenv("OPENAI_API_KEY") == "" {
+			return errors.New("book-run: --engine openai requires OPENAI_API_KEY")
+		}
+		return nil
+	default:
+		return fmt.Errorf("book-run: unknown --engine %q (want scripted|openai)", engineKind)
+	}
 }
