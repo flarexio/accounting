@@ -35,19 +35,19 @@ func loadBookConfig(dir string) (*config.Config, error) {
 }
 
 // buildRepository materialises the LedgerRepository; the returned Closer is always safe to call.
-func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.LedgerRepository, io.Closer, error) {
-	switch cfg.Kind {
+func buildRepository(ctx context.Context, persist config.Persistence, embed config.Embedding) (accounting.LedgerRepository, io.Closer, error) {
+	switch persist.Kind {
 	case config.PersistenceMemory:
 		return memory.NewAccountingRepository(), noopCloser{}, nil
 	case config.PersistencePostgres:
-		embedder := pgrepo.NewOpenAIEmbedder("")
-		repo, closer, err := pgrepo.NewAccountingRepository(ctx, cfg.Postgres.DSN, embedder)
+		embedder := pgrepo.NewOpenAIEmbedder(embed.Model, embed.Dimensions)
+		repo, closer, err := pgrepo.NewAccountingRepository(ctx, persist.Postgres.DSN, embedder)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
 		}
 		return repo, closer, nil
 	default:
-		return nil, nil, fmt.Errorf("book-run: unsupported persistence kind %q", cfg.Kind)
+		return nil, nil, fmt.Errorf("book-run: unsupported persistence kind %q", persist.Kind)
 	}
 }
 

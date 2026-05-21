@@ -127,7 +127,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
 		Hint:  path,
 		Start: func(ctx context.Context) (tui.Session, error) {
-			repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence)
+			repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
 			if err != nil {
 				return nil, err
 			}
