@@ -62,11 +62,10 @@ To keep knowing and doing unified, every agent follows this cycle:
 - **No section dividers** (`// --- point reads ---`). Code organization shows itself.
 - **Treat comment churn as code churn.** Comments that drift out of sync are worse than no comment. If you change a function's contract, update or delete its doc in the same change.
 
-## Go Build Cache
+## Go Tooling
 
-- Never place the Go build cache inside this repository.
-- Do not use `GOCACHE=.gocache` or create `.gocache/`.
-- If the default Go build cache fails locally, use a cache outside the repo, such as `/tmp/go-build-accounting`.
+- **Prefer `go doc` over reading full source files** when exploring a package's API. `go doc github.com/flarexio/stoa/llm` is cheaper than reading every file under `llm/`. Use `go doc -all <pkg>` for the full godoc dump, `go doc <pkg>.<Symbol>` for one type or function, and `go doc -src <pkg>.<Symbol>` when you also need the source body. Drop to full-file reads only when godoc is not enough — implementation details, unexported helpers, or behavior spanning multiple functions.
+- **Never place the Go build cache inside this repository.** Do not use `GOCACHE=.gocache` or create `.gocache/`. If the default cache fails locally, use a cache outside the repo, such as `/tmp/go-build-accounting`.
 
 ## Release Workflow
 
