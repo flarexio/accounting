@@ -5,14 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/agent"
 	"github.com/flarexio/stoa/llm"
 )
 
 func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
-	scenario, repo := awsBillScenario(t)
-	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
@@ -61,8 +60,8 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 }
 
 func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
-	scenario, repo := awsBillScenario(t)
-	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
@@ -92,7 +91,7 @@ func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 }
 
 func TestNewPromptRenderer_NilRepo(t *testing.T) {
-	if _, err := agent.NewPromptRenderer(context.Background(), accounting.Company{}, nil); err == nil {
+	if _, err := agent.NewPromptRenderer(context.Background(), nil); err == nil {
 		t.Fatal("expected error when constructing renderer with nil repository")
 	}
 }

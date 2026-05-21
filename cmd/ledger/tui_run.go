@@ -95,18 +95,7 @@ func (comp tuiComposer) bookOption() tui.Option {
 				repoCloser.Close()
 				return nil, fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
 			}
-			company, ok, err := repo.Company(ctx)
-			if err != nil {
-				bus.Close()
-				repoCloser.Close()
-				return nil, fmt.Errorf("tui: read company: %w", err)
-			}
-			if !ok {
-				bus.Close()
-				repoCloser.Close()
-				return nil, fmt.Errorf("tui: ledger has no company; run `ledger seed` first")
-			}
-			engine, err := buildBookEngine(ctx, company, repo, comp.model)
+			engine, err := buildBookEngine(ctx, repo, comp.model)
 			if err != nil {
 				bus.Close()
 				repoCloser.Close()

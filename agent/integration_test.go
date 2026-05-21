@@ -23,10 +23,10 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Fatal("ACCOUNTING_RUN_OPENAI_TESTS is set but OPENAI_API_KEY is empty")
 	}
 
-	scenario, repo := awsBillScenario(t)
+	_, repo := awsBillScenario(t)
 	bus := wireBus(t, repo)
 
-	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
