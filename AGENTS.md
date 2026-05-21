@@ -64,8 +64,8 @@ To keep knowing and doing unified, every agent follows this cycle:
 
 ## Go Tooling
 
-- **Prefer `go doc` over reading full source files** when exploring a package's API. `go doc github.com/flarexio/stoa/llm` is cheaper than reading every file under `llm/`. Use `go doc -all <pkg>` for the full godoc dump, `go doc <pkg>.<Symbol>` for one type or function, and `go doc -src <pkg>.<Symbol>` when you also need the source body. Drop to full-file reads only when godoc is not enough — implementation details, unexported helpers, or behavior spanning multiple functions.
-- **Never place the Go build cache inside this repository.** Do not use `GOCACHE=.gocache` or create `.gocache/`. If the default cache fails locally, use a cache outside the repo, such as `/tmp/go-build-accounting`.
+- **For external packages, prefer `go doc` to reading source.** Stoa, the OpenAI SDK, and any dependency outside this repo: use `go doc github.com/flarexio/stoa/llm`, `go doc <pkg>.<Symbol>`, or `go doc -src <pkg>.<Symbol>` — much cheaper than scanning an unfamiliar tree with `find` + `Read`. For this repo's own source, read files directly; `go doc` adds no value on code you can already navigate.
+- **Use the default `GOCACHE`.** Run `go test`, `go build`, etc. without prefixing `GOCACHE=` — the default external cache works. Never place the cache inside this repo (no `GOCACHE=.gocache`, no `.gocache/`). Only override with an outside-the-repo path (e.g. `/tmp/go-build-accounting`) when the default cache is actually broken locally.
 
 ## Release Workflow
 
