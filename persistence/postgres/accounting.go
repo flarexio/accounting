@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -92,6 +93,34 @@ func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Accou
 	out := make([]accounting.Account, len(rows))
 	for i, row := range rows {
 		out[i] = accountFromRow(row)
+	}
+	return out, nil
+}
+
+// FindAccounts filters the chart with substring matching against name and code.
+// pgvector-based similarity search is planned but not yet wired; structural
+// parity with the memory adapter for now.
+func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+	rows, err := r.q.ListAccounts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: ListAccounts: %w", err)
+	}
+	needle := strings.ToLower(strings.TrimSpace(filter.NameContains))
+	var out []accounting.Account
+	for _, row := range rows {
+		a := accountFromRow(row)
+		if filter.ActiveOnly && !a.Active {
+			continue
+		}
+		if filter.Type != "" && a.Type != filter.Type {
+			continue
+		}
+		if needle != "" &&
+			!strings.Contains(strings.ToLower(a.Name), needle) &&
+			!strings.Contains(strings.ToLower(a.Code), needle) {
+			continue
+		}
+		out = append(out, a)
 	}
 	return out, nil
 }

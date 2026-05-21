@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"maps"
+	"sort"
 	"sync"
 
 	"github.com/flarexio/accounting"
@@ -70,6 +71,26 @@ func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account
 	for _, a := range r.accounts {
 		out = append(out, a)
 	}
+	return out, nil
+}
+
+// FindAccounts honors Type and ActiveOnly; NameContains is ignored. The memory
+// adapter is for development and tests, so it returns the full matching chart
+// rather than guessing at semantic similarity.
+func (r *accountingRepository) FindAccounts(_ context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]accounting.Account, 0, len(r.accounts))
+	for _, a := range r.accounts {
+		if filter.ActiveOnly && !a.Active {
+			continue
+		}
+		if filter.Type != "" && a.Type != filter.Type {
+			continue
+		}
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
 	return out, nil
 }
 
