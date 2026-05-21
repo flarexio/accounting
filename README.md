@@ -60,9 +60,9 @@ go run ./cmd/ledger tui
 
 `seed` applies one YAML/JSON scenario file (or every `*.yaml` / `*.yml` file in a directory) to the configured repository -- the company, chart of accounts, branches, and periods.
 
-`book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine defaults to the offline scripted demo; switch to `--engine openai --model <model>` (and `OPENAI_API_KEY`) for a real LLM run.
+`book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI; set `llm.model` in `config.yaml` (or pass `--model`) and `OPENAI_API_KEY` in the environment.
 
-`tui` opens the Bubble Tea terminal UI against the seeded ledger; it is openai-only and takes no arguments.
+`tui` opens the Bubble Tea terminal UI against the seeded ledger; same OpenAI requirement, no arguments.
 
 ## Configuration
 
@@ -75,7 +75,7 @@ mkdir -p ~/.flarex/accounting
 cp config.example.yaml ~/.flarex/accounting/config.yaml
 ```
 
-An empty config file is valid and defaults to in-memory persistence, in-process messaging, and the deterministic scripted reasoning engine. For Postgres and NATS, use `config.example.yaml` as the shape.
+An empty config file defaults to in-memory persistence and in-process messaging, but `llm.model` must still be set (and `OPENAI_API_KEY` exported) before the bookkeeper can run. For Postgres and NATS, use `config.example.yaml` as the shape.
 
 ## Local Infrastructure
 
@@ -90,9 +90,9 @@ migrate -path persistence/postgres/migrations \
 
 The compose database uses user `stoa`, password `stoa`, and database `accounting`.
 
-## OpenAI Engine
+## OpenAI
 
-The default scripted engine is offline and deterministic. To use the OpenAI engine, set `llm.engine: openai` and `llm.model` in `config.yaml`, or pass `--engine openai --model <model>`, and set:
+The bookkeeper drives OpenAI directly. Set `llm.model` in `config.yaml` (or pass `--model <model>` to `book-run`), and export the key:
 
 ```bash
 export OPENAI_API_KEY=...

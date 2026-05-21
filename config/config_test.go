@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/flarexio/accounting/config"
-
-	"github.com/flarexio/stoa/llm"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -38,22 +36,14 @@ func TestLoad_EmptyFileDefaultsToInProcess(t *testing.T) {
 	if cfg.Messaging.Kind != config.MessagingInproc {
 		t.Errorf("messaging default: want inproc, got %q", cfg.Messaging.Kind)
 	}
-
-	if cfg.LLM.Engine != llm.EngineScripted {
-		t.Errorf("llm engine default: want scripted, got %q", cfg.LLM.Engine)
-	}
 }
 
-func TestLoad_LLMBlockParsed(t *testing.T) {
-	path := writeConfig(t, "llm:\n  engine: openai\n  model: gpt-5.4-mini\n")
+func TestLoad_LLMModelParsed(t *testing.T) {
+	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n")
 
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-
-	if cfg.LLM.Engine != llm.EngineOpenAI {
-		t.Errorf("llm engine: want openai, got %q", cfg.LLM.Engine)
 	}
 
 	if cfg.LLM.Model != "gpt-5.4-mini" {
@@ -61,29 +51,16 @@ func TestLoad_LLMBlockParsed(t *testing.T) {
 	}
 }
 
-func TestLoad_UnknownEngineRejected(t *testing.T) {
-	path := writeConfig(t, "llm:\n  engine: anthropic\n")
+func TestLoad_RejectsLegacyEngineField(t *testing.T) {
+	// engine was removed; strict decoder must reject leftover entries so stale
+	// configs fail loudly rather than silently picking the wrong engine.
+	path := writeConfig(t, "llm:\n  engine: openai\n")
 	_, err := config.Load(path)
 	if err == nil {
-		t.Fatal("expected error for unsupported llm engine")
+		t.Fatal("expected error for legacy llm.engine field")
 	}
-
-	if !strings.Contains(err.Error(), "anthropic") {
-		t.Errorf("error should name the bad engine, got %v", err)
-	}
-}
-
-func TestLoad_OpenAIEngineDoesNotRequireModel(t *testing.T) {
-	// --model may supply it later; config validation must not reject openai without one.
-	path := writeConfig(t, "llm:\n  engine: openai\n")
-
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if cfg.LLM.Engine != llm.EngineOpenAI || cfg.LLM.Model != "" {
-		t.Errorf("unexpected llm block: %+v", cfg.LLM)
+	if !strings.Contains(err.Error(), "engine") {
+		t.Errorf("error should mention the removed engine field, got %v", err)
 	}
 }
 

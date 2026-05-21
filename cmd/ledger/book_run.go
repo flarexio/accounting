@@ -33,11 +33,8 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Description: "Connects to the ledger seeded by `ledger seed`, runs the agent.Bookkeeper\n" +
 			"loop against --request, and prints a JSON report to stdout. The binary\n" +
 			"reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
-			"the file must exist. The reasoning engine and model come from the\n" +
-			"config.yaml llm block (engine defaults to scripted, the deterministic\n" +
-			"offline engine); --engine and --model override that block when set.\n" +
-			"The openai engine drives a real LLM through the same harness and\n" +
-			"needs OPENAI_API_KEY.",
+			"the file must exist. The reasoning engine is OpenAI, so OPENAI_API_KEY\n" +
+			"must be set; --model overrides config.yaml llm.model.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -45,22 +42,8 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:  "engine",
-				Usage: "reasoning engine: scripted (offline) or openai (live); overrides config.yaml llm.engine",
-			},
-			&cli.StringFlag{
 				Name:  "model",
-				Usage: "model name for the openai engine; overrides config.yaml llm.model",
-			},
-			&cli.IntFlag{
-				Name:  "amount",
-				Usage: "amount in minor currency units for the scripted engine's balanced journal",
-				Value: 10000,
-			},
-			&cli.StringFlag{
-				Name:  "currency",
-				Usage: "ISO currency code used by the scripted engine",
-				Value: "USD",
+				Usage: "openai model name; overrides config.yaml llm.model",
 			},
 			&cli.IntFlag{
 				Name:  "max-turns",
@@ -80,9 +63,6 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 
 func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	request := c.String("request")
-	engineKind := c.String("engine")
-	amount := int64(c.Int("amount"))
-	currency := c.String("currency")
 	maxTurns := int(c.Int("max-turns"))
 	model := c.String("model")
 	workDir := c.String("work-dir")
@@ -92,17 +72,11 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	// --engine / --model override the config.yaml llm block.
-	if engineKind == "" {
-		engineKind = string(cfg.LLM.Engine)
-	}
 	if model == "" {
 		model = cfg.LLM.Model
 	}
 
-	// Validate engine config before touching the repo so misconfigured
-	// invocations (unknown engine, missing OPENAI_API_KEY) fail fast.
-	if err := validateBookEngineConfig(engineKind, model); err != nil {
+	if err := validateOpenAIConfig(model); err != nil {
 		return err
 	}
 
@@ -134,7 +108,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, engineKind, company, repo, amount, currency, model)
+	engine, err := buildBookEngine(ctx, company, repo, model)
 	if err != nil {
 		return err
 	}
@@ -165,21 +139,14 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return runErr
 }
 
-// validateBookEngineConfig checks engine selection without touching the repo
-// so flag/config errors surface before any repository work.
-func validateBookEngineConfig(engineKind, model string) error {
-	switch engineKind {
-	case "", "scripted":
-		return nil
-	case "openai":
-		if model == "" {
-			return errors.New("book-run: --engine openai requires --model or config.yaml llm.model")
-		}
-		if os.Getenv("OPENAI_API_KEY") == "" {
-			return errors.New("book-run: --engine openai requires OPENAI_API_KEY")
-		}
-		return nil
-	default:
-		return fmt.Errorf("book-run: unknown --engine %q (want scripted|openai)", engineKind)
+// validateOpenAIConfig ensures model and OPENAI_API_KEY are present before any
+// repository work, so misconfigured invocations fail fast.
+func validateOpenAIConfig(model string) error {
+	if model == "" {
+		return errors.New("book-run: openai engine requires --model or config.yaml llm.model")
 	}
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		return errors.New("book-run: openai engine requires OPENAI_API_KEY")
+	}
+	return nil
 }

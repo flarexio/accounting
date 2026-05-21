@@ -4,10 +4,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/agent"
@@ -91,42 +91,38 @@ type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
 
-// buildBookEngine selects scripted (offline) or openai for the bookkeeper agent.
-func buildBookEngine(ctx context.Context, kind string, company accounting.Company, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
-	switch kind {
-	case "", "scripted":
-		expense, err := firstActiveAccount(ctx, repo, accounting.AccountExpense)
-		if err != nil {
-			return nil, err
-		}
-		if expense == "" {
-			return nil, errors.New("book-run: scripted engine requires an active expense account")
-		}
-		liability, err := firstActiveAccount(ctx, repo, accounting.AccountLiability)
-		if err != nil {
-			return nil, err
-		}
-		if liability == "" {
-			return nil, errors.New("book-run: scripted engine requires an active liability account")
-		}
-		return newScriptedBookEngine(repo, amount, currency), nil
-	case "openai":
-		renderer, err := agent.NewPromptRenderer(ctx, company, repo)
-		if err != nil {
-			return nil, fmt.Errorf("book-run: openai engine: %w", err)
-		}
-		adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
-			Model:        model,
-			OutputFormat: openai.OutputFormatJSONObject,
-			Renderer:     renderer,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("book-run: openai engine: %w", err)
-		}
-		return adapter, nil
-	default:
-		return nil, fmt.Errorf("book-run: unknown --engine %q (want scripted|openai)", kind)
+// firstOpenPeriod returns the lowest-id open period from repo, or a zero
+// Period when none is open. book-run and tui use it as a precondition check
+// against an empty or fully-closed ledger.
+func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (accounting.Period, error) {
+	periods, err := repo.Periods(ctx)
+	if err != nil {
+		return accounting.Period{}, err
 	}
+	sort.Slice(periods, func(i, j int) bool { return periods[i].ID < periods[j].ID })
+	for _, p := range periods {
+		if p.Status == accounting.PeriodOpen {
+			return p, nil
+		}
+	}
+	return accounting.Period{}, nil
+}
+
+// buildBookEngine wires the OpenAI bookkeeper reasoning engine.
+func buildBookEngine(ctx context.Context, company accounting.Company, repo accounting.LedgerRepository, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+	renderer, err := agent.NewPromptRenderer(ctx, company, repo)
+	if err != nil {
+		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+	}
+	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
+		Model:        model,
+		OutputFormat: openai.OutputFormatJSONObject,
+		Renderer:     renderer,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+	}
+	return adapter, nil
 }
 
 // extractFeedback collects validation/execution-error content for the CLI report.

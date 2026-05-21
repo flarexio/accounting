@@ -12,8 +12,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/flarexio/stoa/llm"
 )
 
 // Filename is the fixed config file name inside the accounting work directory.
@@ -45,10 +43,9 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
-// LLM holds the reasoning engine defaults; CLI flags override these.
+// LLM holds the OpenAI model default; --model overrides it.
 type LLM struct {
-	Engine llm.EngineKind `yaml:"engine"`
-	Model  string         `yaml:"model"`
+	Model string `yaml:"model"`
 }
 
 // Embedding holds the embedding model used by the postgres adapter to populate
@@ -122,10 +119,6 @@ func (c *Config) applyDefaults() {
 		c.Messaging.Kind = MessagingInproc
 	}
 
-	if c.LLM.Engine == "" {
-		c.LLM.Engine = llm.EngineScripted
-	}
-
 	if c.Embedding.Model == "" {
 		c.Embedding.Model = "text-embedding-3-small"
 	}
@@ -162,14 +155,6 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("messaging.kind %q is not supported (inproc|nats)", c.Messaging.Kind))
-	}
-
-	switch c.LLM.Engine {
-	case llm.EngineScripted:
-	case llm.EngineOpenAI:
-		// llm.model is optional at config time; --model can supply it.
-	default:
-		errs = append(errs, fmt.Errorf("llm.engine %q is not supported (scripted|openai)", c.LLM.Engine))
 	}
 
 	if c.Embedding.Dimensions <= 0 {
