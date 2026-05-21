@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/cmd/ledger/tui"
 	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/harness/loop"
@@ -20,15 +17,12 @@ import (
 
 func newTUICommand() *cli.Command {
 	return &cli.Command{
-		Name:      "tui",
-		Usage:     "Launch the conversational Bubble Tea terminal UI.",
-		ArgsUsage: "<scenario> [scenario ...]",
+		Name:  "tui",
+		Usage: "Launch the conversational Bubble Tea terminal UI.",
 		Description: "Launches a conversational terminal UI over the same reason -> validate ->\n" +
-			"execute loop the book-run command uses. Pass one or more accounting scenario\n" +
-			"files (YAML or JSON; chosen by extension); each becomes a selectable bookkeeper session.\n" +
-			"Sessions read config.yaml from\n" +
-			"--work-dir (default ~/.flarex/accounting) and connect to a ledger already seeded\n" +
-			"by `ledger seed` -- the TUI never seeds on startup.",
+			"execute loop the book-run command uses. The TUI connects to the ledger seeded\n" +
+			"by `ledger seed` and reads the single company from the repository; it never\n" +
+			"seeds on startup and takes no arguments.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "engine",
@@ -65,24 +59,6 @@ func newTUICommand() *cli.Command {
 }
 
 func runTUI(ctx context.Context, c *cli.Command) error {
-	paths := c.Args().Slice()
-	if len(paths) == 0 {
-		return errors.New("tui: provide at least one accounting scenario file (YAML or JSON)")
-	}
-
-	type classified struct {
-		path string
-		acc  accounting.Scenario
-	}
-	var items []classified
-	for _, path := range paths {
-		acc, err := accounting.LoadScenarioFile(path)
-		if err != nil {
-			return fmt.Errorf("tui: load accounting scenario %s: %w", path, err)
-		}
-		items = append(items, classified{path: path, acc: acc})
-	}
-
 	cfg, err := loadBookConfig(c.String("work-dir"))
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
@@ -102,15 +78,10 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 		comp.model = cfg.LLM.Model
 	}
 
-	var options []tui.Option
-	for _, it := range items {
-		options = append(options, comp.bookOption(it.path, it.acc))
-	}
-
-	return tui.Run(ctx, options)
+	return tui.Run(ctx, []tui.Option{comp.bookOption()})
 }
 
-// tuiComposer turns classified scenarios into tui.Options.
+// tuiComposer builds the bookkeeper session from config and CLI flags.
 type tuiComposer struct {
 	cfg        *config.Config
 	engineKind string
@@ -120,12 +91,11 @@ type tuiComposer struct {
 	maxTurns   int
 }
 
-// bookOption is a selectable bookkeeper session; the TUI never seeds, it
-// connects to a ledger already seeded by `ledger seed`.
-func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
+// bookOption is the bookkeeper session; the TUI never seeds, it connects to a
+// ledger already seeded by `ledger seed` and reads the company from the repo.
+func (comp tuiComposer) bookOption() tui.Option {
 	return tui.Option{
-		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
-		Hint:  path,
+		Label: "bookkeeper",
 		Start: func(ctx context.Context) (tui.Session, error) {
 			repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
 			if err != nil {
@@ -147,7 +117,18 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 				repoCloser.Close()
 				return nil, fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
 			}
-			engine, err := buildBookEngine(ctx, comp.engineKind, scenario, repo, comp.amount, comp.currency, comp.model)
+			company, ok, err := repo.Company(ctx)
+			if err != nil {
+				bus.Close()
+				repoCloser.Close()
+				return nil, fmt.Errorf("tui: read company: %w", err)
+			}
+			if !ok {
+				bus.Close()
+				repoCloser.Close()
+				return nil, fmt.Errorf("tui: ledger has no company; run `ledger seed` first")
+			}
+			engine, err := buildBookEngine(ctx, comp.engineKind, company, repo, comp.amount, comp.currency, comp.model)
 			if err != nil {
 				bus.Close()
 				repoCloser.Close()
@@ -164,13 +145,6 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 			}, nil
 		},
 	}
-}
-
-func scenarioLabel(name, path string) string {
-	if name != "" {
-		return name
-	}
-	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }
 
 type bookSession struct {

@@ -17,10 +17,19 @@ type LedgerRepository interface {
 	Branches(ctx context.Context) ([]Branch, error)
 	Entries(ctx context.Context) ([]JournalEntry, error)
 
+	// Company returns the single company this ledger belongs to. When no
+	// company has been set, ok is false. When the underlying store somehow
+	// holds more than one, the implementation returns an error rather than
+	// silently picking one.
+	Company(ctx context.Context) (Company, bool, error)
+
 	// FindAccounts searches the chart by filter. Adapters choose the strategy:
 	// substring match, vector similarity, etc.
 	FindAccounts(ctx context.Context, filter AccountFilter) ([]Account, error)
 
+	// SetCompany stores the company. The ledger is single-company by design;
+	// SetCompany overwrites any prior value at the same ID.
+	SetCompany(ctx context.Context, c Company) error
 	PutAccount(ctx context.Context, a Account) error
 	PutPeriod(ctx context.Context, p Period) error
 	PutBranch(ctx context.Context, b Branch) error

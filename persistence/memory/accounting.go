@@ -14,6 +14,7 @@ import (
 // in and out so callers cannot mutate stored state through a returned value.
 type accountingRepository struct {
 	mu       sync.RWMutex
+	company  *accounting.Company
 	accounts map[string]accounting.Account
 	branches map[string]accounting.Branch
 	periods  map[string]accounting.Period
@@ -122,6 +123,22 @@ func (r *accountingRepository) Entries(_ context.Context) ([]accounting.JournalE
 		out[i] = cloneAccountingEntry(e)
 	}
 	return out, nil
+}
+
+func (r *accountingRepository) Company(_ context.Context) (accounting.Company, bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.company == nil {
+		return accounting.Company{}, false, nil
+	}
+	return *r.company, true, nil
+}
+
+func (r *accountingRepository) SetCompany(_ context.Context, c accounting.Company) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.company = &c
+	return nil
 }
 
 func (r *accountingRepository) PutAccount(_ context.Context, a accounting.Account) error {
