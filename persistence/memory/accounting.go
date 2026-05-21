@@ -75,9 +75,7 @@ func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account
 	return out, nil
 }
 
-// FindAccounts honors Type and ActiveOnly; NameContains is ignored. The memory
-// adapter is for development and tests, so it returns the full matching chart
-// rather than guessing at semantic similarity.
+// FindAccounts honors Type and ActiveOnly; NameContains is ignored.
 func (r *accountingRepository) FindAccounts(_ context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

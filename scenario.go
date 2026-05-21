@@ -73,9 +73,7 @@ func DecodeScenarioYAML(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// Seed upserts the scenario's company, chart, branches, and periods into repo
-// through its Set/Put* methods; it does not check for or merge with existing
-// state. An empty Company is skipped so test scenarios that omit it stay valid.
+// Seed upserts the scenario's company, chart, branches, and periods into repo. An empty Company is skipped.
 func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
 	if s.Company.ID != "" {
 		if err := repo.SetCompany(ctx, s.Company); err != nil {

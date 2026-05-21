@@ -131,8 +131,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return runErr
 }
 
-// validateOpenAIConfig ensures model and OPENAI_API_KEY are present before any
-// repository work, so misconfigured invocations fail fast.
+// validateOpenAIConfig ensures model and OPENAI_API_KEY are present.
 func validateOpenAIConfig(model string) error {
 	if model == "" {
 		return errors.New("book-run: openai engine requires --model or config.yaml llm.model")

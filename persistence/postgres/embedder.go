@@ -9,25 +9,18 @@ import (
 	"github.com/openai/openai-go/packages/param"
 )
 
-// Embedder turns an account-identifying string into a fixed-dimension vector.
-// The postgres adapter uses it both at PutAccount (to write the vector column)
-// and at FindAccounts (to embed the query before similarity search).
+// Embedder turns text into a fixed-dimension vector for pgvector storage and similarity search.
 type Embedder interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
-// openAIEmbedder calls the OpenAI Embeddings API. The OpenAI client reads
-// OPENAI_API_KEY from the environment by default.
 type openAIEmbedder struct {
 	client     openai.Client
 	model      openai.EmbeddingModel
 	dimensions int64
 }
 
-// NewOpenAIEmbedder builds an Embedder backed by OpenAI's text-embedding-3-*
-// family. dimensions must match the accounts.embedding column width set by
-// migration 0002 (1536 by default); a mismatch surfaces as a pgvector error
-// at the first PutAccount call.
+// NewOpenAIEmbedder builds an Embedder backed by the OpenAI Embeddings API. dimensions must match the schema's vector column width.
 func NewOpenAIEmbedder(model string, dimensions int) Embedder {
 	return &openAIEmbedder{
 		client:     openai.NewClient(),
