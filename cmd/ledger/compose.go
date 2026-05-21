@@ -92,7 +92,7 @@ type noopCloser struct{}
 func (noopCloser) Close() error { return nil }
 
 // buildBookEngine selects scripted (offline) or openai for the bookkeeper agent.
-func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+func buildBookEngine(ctx context.Context, kind string, company accounting.Company, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	switch kind {
 	case "", "scripted":
 		expense, err := firstActiveAccount(ctx, repo, accounting.AccountExpense)
@@ -111,7 +111,7 @@ func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scena
 		}
 		return newScriptedBookEngine(repo, amount, currency), nil
 	case "openai":
-		renderer, err := agent.NewPromptRenderer(ctx, scenario.Company, repo)
+		renderer, err := agent.NewPromptRenderer(ctx, company, repo)
 		if err != nil {
 			return nil, fmt.Errorf("book-run: openai engine: %w", err)
 		}

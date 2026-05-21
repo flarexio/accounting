@@ -40,6 +40,46 @@ func NewAccountingRepository(ctx context.Context, dsn string, embedder Embedder)
 	return &accountingRepository{pool: pool, q: pgstore.New(pool), embedder: embedder}, closer, nil
 }
 
+// Company returns the single company row from the companies table. Two or
+// more rows are treated as an error rather than silently picking one, so a
+// misconfigured ledger fails loud at startup.
+func (r *accountingRepository) Company(ctx context.Context) (accounting.Company, bool, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name FROM companies LIMIT 2`)
+	if err != nil {
+		return accounting.Company{}, false, fmt.Errorf("postgres: Company: %w", err)
+	}
+	defer rows.Close()
+	var companies []accounting.Company
+	for rows.Next() {
+		var c accounting.Company
+		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+			return accounting.Company{}, false, fmt.Errorf("postgres: scan company: %w", err)
+		}
+		companies = append(companies, c)
+	}
+	if err := rows.Err(); err != nil {
+		return accounting.Company{}, false, fmt.Errorf("postgres: iterate companies: %w", err)
+	}
+	switch len(companies) {
+	case 0:
+		return accounting.Company{}, false, nil
+	case 1:
+		return companies[0], true, nil
+	default:
+		return accounting.Company{}, false, fmt.Errorf("postgres: expected single company, found %d", len(companies))
+	}
+}
+
+func (r *accountingRepository) SetCompany(ctx context.Context, c accounting.Company) error {
+	if _, err := r.pool.Exec(ctx, `
+INSERT INTO companies (id, name) VALUES ($1, $2)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+`, c.ID, c.Name); err != nil {
+		return fmt.Errorf("postgres: SetCompany: %w", err)
+	}
+	return nil
+}
+
 func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {
 	row, err := r.q.GetAccount(ctx, code)
 	if err != nil {
