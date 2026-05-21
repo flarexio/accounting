@@ -40,7 +40,8 @@ func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.Le
 	case config.PersistenceMemory:
 		return memory.NewAccountingRepository(), noopCloser{}, nil
 	case config.PersistencePostgres:
-		repo, closer, err := pgrepo.NewAccountingRepository(ctx, cfg.Postgres.DSN)
+		embedder := pgrepo.NewOpenAIEmbedder("")
+		repo, closer, err := pgrepo.NewAccountingRepository(ctx, cfg.Postgres.DSN, embedder)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
 		}

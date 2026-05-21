@@ -17,19 +17,27 @@ import (
 )
 
 // accountingRepository implements accounting.LedgerRepository against Postgres.
+// PutAccount embeds the account name and stores it in the pgvector column;
+// FindAccounts uses cosine similarity when NameContains is set.
 type accountingRepository struct {
-	pool *pgxpool.Pool
-	q    *pgstore.Queries
+	pool     *pgxpool.Pool
+	q        *pgstore.Queries
+	embedder Embedder
 }
 
 // NewAccountingRepository opens a pgxpool.Pool from dsn and returns the
 // accounting.LedgerRepository it backs, plus an io.Closer the caller defers.
-func NewAccountingRepository(ctx context.Context, dsn string) (accounting.LedgerRepository, io.Closer, error) {
+// The embedder is required: PutAccount calls it synchronously so the chart's
+// vector column stays consistent with each upsert.
+func NewAccountingRepository(ctx context.Context, dsn string, embedder Embedder) (accounting.LedgerRepository, io.Closer, error) {
+	if embedder == nil {
+		return nil, nil, errors.New("postgres: NewAccountingRepository requires a non-nil Embedder")
+	}
 	pool, closer, err := connectPool(ctx, dsn)
 	if err != nil {
 		return nil, nil, err
 	}
-	return &accountingRepository{pool: pool, q: pgstore.New(pool)}, closer, nil
+	return &accountingRepository{pool: pool, q: pgstore.New(pool), embedder: embedder}, closer, nil
 }
 
 func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {
@@ -97,32 +105,87 @@ func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Accou
 	return out, nil
 }
 
-// FindAccounts filters the chart with substring matching against name and code.
-// pgvector-based similarity search is planned but not yet wired; structural
-// parity with the memory adapter for now.
+// FindAccounts uses cosine similarity against the embedding column when
+// NameContains is set, falling back to a simple Type/ActiveOnly filter when
+// it is empty. The similarity result is capped at findAccountsSimilarityLimit.
 func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
-	rows, err := r.q.ListAccounts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("postgres: ListAccounts: %w", err)
+	needle := strings.TrimSpace(filter.NameContains)
+	if needle == "" {
+		return r.findAccountsByFilter(ctx, filter)
 	}
-	needle := strings.ToLower(strings.TrimSpace(filter.NameContains))
+	return r.findAccountsBySimilarity(ctx, filter, needle)
+}
+
+// findAccountsSimilarityLimit caps similarity results so a vague query cannot
+// return the entire chart. 20 is enough to give the model real choice without
+// overwhelming the next prompt.
+const findAccountsSimilarityLimit = 20
+
+func (r *accountingRepository) findAccountsByFilter(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+	rows, err := r.pool.Query(ctx, `
+SELECT code, name, type, active
+FROM accounts
+WHERE (NOT $1::bool OR active)
+  AND ($2::text = '' OR type = $2::text)
+ORDER BY code
+`, filter.ActiveOnly, string(filter.Type))
+	if err != nil {
+		return nil, fmt.Errorf("postgres: FindAccounts: %w", err)
+	}
+	defer rows.Close()
+	return scanAccountRows(rows)
+}
+
+func (r *accountingRepository) findAccountsBySimilarity(ctx context.Context, filter accounting.AccountFilter, query string) ([]accounting.Account, error) {
+	vec, err := r.embedder.Embed(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+SELECT code, name, type, active
+FROM accounts
+WHERE (NOT $1::bool OR active)
+  AND ($2::text = '' OR type = $2::text)
+  AND embedding IS NOT NULL
+ORDER BY embedding <=> $3::vector
+LIMIT $4
+`, filter.ActiveOnly, string(filter.Type), formatVector(vec), findAccountsSimilarityLimit)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: FindAccounts (similarity): %w", err)
+	}
+	defer rows.Close()
+	return scanAccountRows(rows)
+}
+
+func scanAccountRows(rows pgx.Rows) ([]accounting.Account, error) {
 	var out []accounting.Account
-	for _, row := range rows {
-		a := accountFromRow(row)
-		if filter.ActiveOnly && !a.Active {
-			continue
+	for rows.Next() {
+		var row pgstore.Account
+		if err := rows.Scan(&row.Code, &row.Name, &row.Type, &row.Active); err != nil {
+			return nil, fmt.Errorf("postgres: scan account: %w", err)
 		}
-		if filter.Type != "" && a.Type != filter.Type {
-			continue
-		}
-		if needle != "" &&
-			!strings.Contains(strings.ToLower(a.Name), needle) &&
-			!strings.Contains(strings.ToLower(a.Code), needle) {
-			continue
-		}
-		out = append(out, a)
+		out = append(out, accountFromRow(row))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: iterate accounts: %w", err)
 	}
 	return out, nil
+}
+
+// formatVector encodes a float32 slice in pgvector's text input format:
+// "[v1,v2,...]". The driver passes it as text and the ::vector cast in SQL
+// parses it server-side.
+func formatVector(v []float32) string {
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, x := range v {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, "%g", x)
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 func (r *accountingRepository) Periods(ctx context.Context) ([]accounting.Period, error) {
@@ -183,14 +246,24 @@ func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.Journa
 	return out, nil
 }
 
+// PutAccount upserts the account row and writes its embedding in the same
+// statement. Embedding is computed synchronously: seed time grows linearly
+// with chart size and depends on the embedding API being reachable.
 func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
-	if err := r.q.UpsertAccount(ctx, pgstore.UpsertAccountParams{
-		Code:   a.Code,
-		Name:   a.Name,
-		Type:   string(a.Type),
-		Active: a.Active,
-	}); err != nil {
-		return fmt.Errorf("postgres: UpsertAccount: %w", err)
+	vec, err := r.embedder.Embed(ctx, a.Code+" "+a.Name)
+	if err != nil {
+		return err
+	}
+	if _, err := r.pool.Exec(ctx, `
+INSERT INTO accounts (code, name, type, active, embedding)
+VALUES ($1, $2, $3, $4, $5::vector)
+ON CONFLICT (code) DO UPDATE
+SET name = EXCLUDED.name,
+    type = EXCLUDED.type,
+    active = EXCLUDED.active,
+    embedding = EXCLUDED.embedding
+`, a.Code, a.Name, string(a.Type), a.Active, formatVector(vec)); err != nil {
+		return fmt.Errorf("postgres: PutAccount: %w", err)
 	}
 	return nil
 }

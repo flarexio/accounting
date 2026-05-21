@@ -10,6 +10,7 @@ require (
 	github.com/flarexio/stoa v1.0.1
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.52.0
+	github.com/openai/openai-go v1.12.0
 	github.com/urfave/cli/v3 v3.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -40,7 +41,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/openai/openai-go v1.12.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/tidwall/gjson v1.14.4 // indirect
