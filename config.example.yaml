@@ -26,3 +26,12 @@ llm:
   # The --engine / --model CLI flags override this block when set.
   engine: openai
   model: gpt-5.4-mini
+
+embedding:
+  # Used only by the postgres adapter to populate the accounts.embedding column
+  # and to embed queries in FindAccounts. Memory adapter ignores this block.
+  # Dimensions must match the vector column width set by migration 0002
+  # (1536 for text-embedding-3-small). Changing dimensions requires a new
+  # migration that re-types accounts.embedding accordingly.
+  model: text-embedding-3-small
+  dimensions: 1536

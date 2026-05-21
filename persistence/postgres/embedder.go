@@ -19,20 +19,20 @@ type Embedder interface {
 // openAIEmbedder calls the OpenAI Embeddings API. The OpenAI client reads
 // OPENAI_API_KEY from the environment by default.
 type openAIEmbedder struct {
-	client openai.Client
-	model  openai.EmbeddingModel
+	client     openai.Client
+	model      openai.EmbeddingModel
+	dimensions int64
 }
 
 // NewOpenAIEmbedder builds an Embedder backed by OpenAI's text-embedding-3-*
-// family. The model name must match the vector dimension of the accounts
-// table (the schema is fixed at 1536 for text-embedding-3-small).
-func NewOpenAIEmbedder(model string) Embedder {
-	if model == "" {
-		model = openai.EmbeddingModelTextEmbedding3Small
-	}
+// family. dimensions must match the accounts.embedding column width set by
+// migration 0002 (1536 by default); a mismatch surfaces as a pgvector error
+// at the first PutAccount call.
+func NewOpenAIEmbedder(model string, dimensions int) Embedder {
 	return &openAIEmbedder{
-		client: openai.NewClient(),
-		model:  model,
+		client:     openai.NewClient(),
+		model:      model,
+		dimensions: int64(dimensions),
 	}
 }
 
@@ -40,10 +40,14 @@ func (e *openAIEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	if text == "" {
 		return nil, errors.New("postgres: embedder: empty input")
 	}
-	resp, err := e.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+	params := openai.EmbeddingNewParams{
 		Input: openai.EmbeddingNewParamsInputUnion{OfString: param.NewOpt(text)},
 		Model: e.model,
-	})
+	}
+	if e.dimensions > 0 {
+		params.Dimensions = param.NewOpt(e.dimensions)
+	}
+	resp, err := e.client.Embeddings.New(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: embed %q: %w", text, err)
 	}

@@ -51,11 +51,20 @@ type LLM struct {
 	Model  string         `yaml:"model"`
 }
 
+// Embedding holds the embedding model used by the postgres adapter to populate
+// the accounts.embedding vector column. Dimensions must match the schema
+// (migration 0002 sets it to 1536); changing this requires a new migration.
+type Embedding struct {
+	Model      string `yaml:"model"`
+	Dimensions int    `yaml:"dimensions"`
+}
+
 // Config is the decoded representation of config.yaml.
 type Config struct {
 	Persistence Persistence `yaml:"persistence"`
 	Messaging   Messaging   `yaml:"messaging"`
 	LLM         LLM         `yaml:"llm"`
+	Embedding   Embedding   `yaml:"embedding"`
 }
 
 type Persistence struct {
@@ -116,6 +125,13 @@ func (c *Config) applyDefaults() {
 	if c.LLM.Engine == "" {
 		c.LLM.Engine = llm.EngineScripted
 	}
+
+	if c.Embedding.Model == "" {
+		c.Embedding.Model = "text-embedding-3-small"
+	}
+	if c.Embedding.Dimensions == 0 {
+		c.Embedding.Dimensions = 1536
+	}
 }
 
 // Validate returns a joined error of every misconfiguration found.
@@ -154,6 +170,10 @@ func (c *Config) Validate() error {
 		// llm.model is optional at config time; --model can supply it.
 	default:
 		errs = append(errs, fmt.Errorf("llm.engine %q is not supported (scripted|openai)", c.LLM.Engine))
+	}
+
+	if c.Embedding.Dimensions <= 0 {
+		errs = append(errs, fmt.Errorf("embedding.dimensions must be positive (got %d)", c.Embedding.Dimensions))
 	}
 
 	return errors.Join(errs...)

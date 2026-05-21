@@ -58,7 +58,7 @@ func runSeed(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 
-	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence)
+	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence, cfg.Embedding)
 	if err != nil {
 		return err
 	}
