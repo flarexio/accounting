@@ -94,21 +94,13 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return errors.New("book-run: ledger has no open period; run `ledger seed` first")
 	}
 
-	company, ok, err := repo.Company(ctx)
-	if err != nil {
-		return fmt.Errorf("book-run: read company: %w", err)
-	}
-	if !ok {
-		return errors.New("book-run: ledger has no company; run `ledger seed` first")
-	}
-
 	bus, err := buildMessaging(ctx, cfg.Messaging, repo)
 	if err != nil {
 		return err
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, company, repo, model)
+	engine, err := buildBookEngine(ctx, repo, model)
 	if err != nil {
 		return err
 	}
