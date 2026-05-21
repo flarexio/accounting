@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Code Review with Claude
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+        uses: flarexio/claude-runner@v1
+        with:
+          prompt: |
+            Review all changed files in this repository.
+            Before reviewing, search for all REVIEW.md files. If found, apply the root
+            REVIEW.md as global review guidelines and each subdirectory's REVIEW.md as
+            additional guidelines scoped to that directory.
+            Provide a concise summary of findings. If the code looks good, say so briefly.
+          repo: ${{ github.server_url }}/${{ github.repository }}.git
+          ref: ${{ github.head_ref || github.ref_name }}
+          base-ref: ${{ github.base_ref }}
+          event: ${{ github.event_name }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          nats-creds-content: ${{ secrets.NATS_CREDS }}
+          edge-id: ${{ secrets.EDGE_ID }}
+          output-file: claude-output.md
+
+      - name: Add Claude review to summary
+        if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft
+        run: |
+          if [ -f claude-output.md ]; then
+            echo "# Claude Review" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat claude-output.md >> "$GITHUB_STEP_SUMMARY"
+          fi
