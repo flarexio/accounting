@@ -1,0 +1,29 @@
+name: Agent Task
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  agent:
+    if: github.event.label.name == 'agent-ready'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Claude on issue
+        uses: flarexio/claude-runner@v1
+        with:
+          event: issue
+          repo: ${{ github.server_url }}/${{ github.repository }}.git
+          issue-number: ${{ github.event.issue.number }}
+          nats-creds-content: ${{ secrets.NATS_CREDS }}
+          edge-id: ${{ secrets.EDGE_ID }}
+          output-file: claude-output.md
+
+      - name: Add Claude output to summary
+        if: always()
+        run: |
+          if [ -f claude-output.md ]; then
+            echo "# Claude Issue Run" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat claude-output.md >> "$GITHUB_STEP_SUMMARY"
+          fi
