@@ -11,7 +11,7 @@
 #   docker compose down
 services:
   postgres:
-    image: postgres:18-alpine
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: stoa
       POSTGRES_PASSWORD: stoa
