@@ -20,11 +20,10 @@ func newTUICommand() *cli.Command {
 		Name:  "tui",
 		Usage: "Launch the conversational Bubble Tea terminal UI.",
 		Description: "Launches a conversational terminal UI over the same reason -> validate ->\n" +
-			"execute loop the book-run command uses. The TUI is openai-only -- the scripted\n" +
-			"engine produces demo entries unrelated to the user's request, so it has no place\n" +
-			"in an interactive session. OPENAI_API_KEY must be set. The TUI connects to the\n" +
-			"ledger seeded by `ledger seed` and reads the single company from the repository;\n" +
-			"it never seeds on startup and takes no arguments.",
+			"execute loop the book-run command uses. Drives a real LLM through the OpenAI\n" +
+			"engine, so OPENAI_API_KEY must be set. The TUI connects to the ledger seeded by\n" +
+			"`ledger seed` and reads the single company from the repository; it never seeds\n" +
+			"on startup and takes no arguments.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "model",
@@ -107,7 +106,7 @@ func (comp tuiComposer) bookOption() tui.Option {
 				repoCloser.Close()
 				return nil, fmt.Errorf("tui: ledger has no company; run `ledger seed` first")
 			}
-			engine, err := buildBookEngine(ctx, "openai", company, repo, 0, "", comp.model)
+			engine, err := buildBookEngine(ctx, company, repo, comp.model)
 			if err != nil {
 				bus.Close()
 				repoCloser.Close()

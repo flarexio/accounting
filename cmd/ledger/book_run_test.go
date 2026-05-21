@@ -52,9 +52,9 @@ func runBookCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 }
 
 // These tests cover the CLI surface only -- flag and config validation, error
-// messages, work-dir resolution. End-to-end behavior (scripted self-correction,
-// scenario-driven posting) lives in agent/agent_test.go where it does not need
-// to thread through CLI argument parsing.
+// messages, work-dir resolution. End-to-end behavior (scenario-driven posting)
+// lives in agent/agent_test.go where it does not need to thread through CLI
+// argument parsing.
 
 func TestRunBook_RequiresRequest(t *testing.T) {
 	seedInProcessConfig(t)
@@ -68,63 +68,51 @@ func TestRunBook_RequiresRequest(t *testing.T) {
 	}
 }
 
-func TestRunBook_UnknownEngine(t *testing.T) {
-	seedInProcessConfig(t)
-	var stdout, stderr bytes.Buffer
-	args := []string{"--request", "x", "--engine", "anthropic"}
-	err := runBookCLI(context.Background(), args, &stdout, &stderr)
-	if err == nil {
-		t.Fatal("expected error for unknown --engine")
-	}
-	if !strings.Contains(err.Error(), "anthropic") {
-		t.Errorf("error should name the bad engine, got %v", err)
-	}
-}
-
-func TestRunBook_OpenAIRequiresAPIKey(t *testing.T) {
+func TestRunBook_RequiresAPIKey(t *testing.T) {
 	seedInProcessConfig(t)
 	t.Setenv("OPENAI_API_KEY", "")
 	var stdout, stderr bytes.Buffer
-	args := []string{"--request", "x", "--engine", "openai", "--model", "gpt-5.4-mini"}
+	args := []string{"--request", "x", "--model", "gpt-5.4-mini"}
 	err := runBookCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("expected error when --engine openai is selected without OPENAI_API_KEY")
+		t.Fatal("expected error without OPENAI_API_KEY")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "openai_api_key") {
 		t.Errorf("error should mention OPENAI_API_KEY, got %v", err)
 	}
 }
 
-func TestRunBook_OpenAIRequiresModel(t *testing.T) {
+func TestRunBook_RequiresModel(t *testing.T) {
 	seedInProcessConfig(t)
 	t.Setenv("OPENAI_API_KEY", "fake-key-for-test")
 	var stdout, stderr bytes.Buffer
-	args := []string{"--request", "x", "--engine", "openai"}
+	args := []string{"--request", "x"}
 	err := runBookCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("expected error when --engine openai is selected without --model")
+		t.Fatal("expected error without --model or config.yaml llm.model")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "model") {
 		t.Errorf("error should mention model, got %v", err)
 	}
 }
 
-const llmOpenAIConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n" +
-	"llm:\n  engine: openai\n  model: gpt-5.4-mini\n"
+const llmModelConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n" +
+	"llm:\n  model: gpt-5.4-mini\n"
 
-func TestRunBook_ConfigLLMSelectsOpenAIEngine(t *testing.T) {
-	// Failing on the absent API key proves the config llm block was used --
-	// a scripted-engine default would have passed validation.
-	seedConfigBody(t, llmOpenAIConfig)
+func TestRunBook_ConfigLLMModelUsed(t *testing.T) {
+	// With config llm.model set and no --model flag, validation should pass
+	// the model check and instead fail on the absent API key -- proving the
+	// config value reached validateOpenAIConfig.
+	seedConfigBody(t, llmModelConfig)
 	t.Setenv("OPENAI_API_KEY", "")
 	var stdout, stderr bytes.Buffer
 	args := []string{"--request", "x"}
 	err := runBookCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("expected the config-selected openai engine to fail without OPENAI_API_KEY")
+		t.Fatal("expected error without OPENAI_API_KEY")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "openai_api_key") {
-		t.Errorf("error should mention OPENAI_API_KEY (config llm.engine+model used), got %v", err)
+		t.Errorf("error should mention OPENAI_API_KEY (config llm.model used), got %v", err)
 	}
 }
 

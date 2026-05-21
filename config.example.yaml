@@ -21,10 +21,8 @@ messaging:
     consumer: accounting-book-run
 
 llm:
-  # scripted -> deterministic offline engine; model is ignored.
-  # openai   -> drives a real LLM; needs model + OPENAI_API_KEY.
-  # The --engine / --model CLI flags override this block when set.
-  engine: openai
+  # OpenAI is the only reasoning engine. --model overrides this; OPENAI_API_KEY
+  # must be set in the environment.
   model: gpt-5.4-mini
 
 embedding:
