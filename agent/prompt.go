@@ -20,8 +20,7 @@ type PromptRenderer struct {
 	Branches []accounting.Branch
 }
 
-// NewPromptRenderer reads the company, chart, periods, and branches from repo
-// once. The ledger must already have a company set (via `ledger seed`).
+// NewPromptRenderer snapshots the company, chart, periods, and branches from repo.
 func NewPromptRenderer(ctx context.Context, repo accounting.LedgerRepository) (PromptRenderer, error) {
 	if repo == nil {
 		return PromptRenderer{}, fmt.Errorf("bookkeeper: NewPromptRenderer needs a repository")

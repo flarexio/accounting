@@ -91,9 +91,7 @@ type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
 
-// firstOpenPeriod returns the lowest-id open period from repo, or a zero
-// Period when none is open. book-run and tui use it as a precondition check
-// against an empty or fully-closed ledger.
+// firstOpenPeriod returns the lowest-id open period, or a zero Period when none is open.
 func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (accounting.Period, error) {
 	periods, err := repo.Periods(ctx)
 	if err != nil {

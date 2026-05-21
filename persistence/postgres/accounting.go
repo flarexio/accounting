@@ -16,19 +16,13 @@ import (
 	"github.com/flarexio/accounting/persistence/postgres/pgstore"
 )
 
-// accountingRepository implements accounting.LedgerRepository against Postgres.
-// PutAccount embeds the account name and stores it in the pgvector column;
-// FindAccounts uses cosine similarity when NameContains is set.
 type accountingRepository struct {
 	pool     *pgxpool.Pool
 	q        *pgstore.Queries
 	embedder Embedder
 }
 
-// NewAccountingRepository opens a pgxpool.Pool from dsn and returns the
-// accounting.LedgerRepository it backs, plus an io.Closer the caller defers.
-// The embedder is required: PutAccount calls it synchronously so the chart's
-// vector column stays consistent with each upsert.
+// NewAccountingRepository opens a pgxpool.Pool from dsn and returns the LedgerRepository plus its Closer. embedder is required.
 func NewAccountingRepository(ctx context.Context, dsn string, embedder Embedder) (accounting.LedgerRepository, io.Closer, error) {
 	if embedder == nil {
 		return nil, nil, errors.New("postgres: NewAccountingRepository requires a non-nil Embedder")
@@ -40,9 +34,6 @@ func NewAccountingRepository(ctx context.Context, dsn string, embedder Embedder)
 	return &accountingRepository{pool: pool, q: pgstore.New(pool), embedder: embedder}, closer, nil
 }
 
-// Company returns the single company row from the companies table. Two or
-// more rows are treated as an error rather than silently picking one, so a
-// misconfigured ledger fails loud at startup.
 func (r *accountingRepository) Company(ctx context.Context) (accounting.Company, bool, error) {
 	rows, err := r.pool.Query(ctx, `SELECT id, name FROM companies LIMIT 2`)
 	if err != nil {
@@ -145,9 +136,7 @@ func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Accou
 	return out, nil
 }
 
-// FindAccounts uses cosine similarity against the embedding column when
-// NameContains is set, falling back to a simple Type/ActiveOnly filter when
-// it is empty. The similarity result is capped at findAccountsSimilarityLimit.
+// FindAccounts uses pgvector cosine similarity when NameContains is set; otherwise a plain Type/ActiveOnly SQL filter.
 func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
 	needle := strings.TrimSpace(filter.NameContains)
 	if needle == "" {
@@ -156,9 +145,6 @@ func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounti
 	return r.findAccountsBySimilarity(ctx, filter, needle)
 }
 
-// findAccountsSimilarityLimit caps similarity results so a vague query cannot
-// return the entire chart. 20 is enough to give the model real choice without
-// overwhelming the next prompt.
 const findAccountsSimilarityLimit = 20
 
 func (r *accountingRepository) findAccountsByFilter(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
@@ -212,9 +198,7 @@ func scanAccountRows(rows pgx.Rows) ([]accounting.Account, error) {
 	return out, nil
 }
 
-// formatVector encodes a float32 slice in pgvector's text input format:
-// "[v1,v2,...]". The driver passes it as text and the ::vector cast in SQL
-// parses it server-side.
+// formatVector encodes a float32 slice in pgvector's text input format ("[v1,v2,...]").
 func formatVector(v []float32) string {
 	var b strings.Builder
 	b.WriteByte('[')
@@ -286,9 +270,7 @@ func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.Journa
 	return out, nil
 }
 
-// PutAccount upserts the account row and writes its embedding in the same
-// statement. Embedding is computed synchronously: seed time grows linearly
-// with chart size and depends on the embedding API being reachable.
+// PutAccount upserts the account row and writes its embedding in the same statement.
 func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
 	vec, err := r.embedder.Embed(ctx, a.Code+" "+a.Name)
 	if err != nil {
