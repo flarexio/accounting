@@ -60,7 +60,7 @@ go run ./cmd/ledger tui
 
 `seed` applies one YAML/JSON scenario file (or every `*.yaml` / `*.yml` file in a directory) to the configured repository -- the company, chart of accounts, branches, and periods.
 
-`book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI; set `llm.model` in `config.yaml` (or pass `--model`) and `OPENAI_API_KEY` in the environment.
+`book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI-compatible; set `llm.model` and `llm.api_key` in `config.yaml` (or pass `--model`) and optionally `llm.base_url` for alternative providers.
 
 `tui` opens the Bubble Tea terminal UI against the seeded ledger; same OpenAI requirement, no arguments.
 
@@ -75,7 +75,7 @@ mkdir -p ~/.flarex/accounting
 cp config.example.yaml ~/.flarex/accounting/config.yaml
 ```
 
-An empty config file defaults to in-memory persistence and in-process messaging, but `llm.model` must still be set (and `OPENAI_API_KEY` exported) before the bookkeeper can run. For Postgres and NATS, use `config.example.yaml` as the shape.
+An empty config file defaults to in-memory persistence and in-process messaging, but `llm.model` must still be set before the bookkeeper can run. Set `llm.api_key` in config or export `OPENAI_API_KEY`. For OpenAI-compatible providers, set `llm.base_url`. For Postgres and NATS, use `config.example.yaml` as the shape.
 
 ## Local Infrastructure
 
@@ -92,11 +92,16 @@ The compose database uses user `stoa`, password `stoa`, and database `accounting
 
 ## OpenAI
 
-The bookkeeper drives OpenAI directly. Set `llm.model` in `config.yaml` (or pass `--model <model>` to `book-run`), and export the key:
+The bookkeeper drives an OpenAI-compatible API. Configure `llm` in `config.yaml`:
 
-```bash
-export OPENAI_API_KEY=...
+```yaml
+llm:
+  model: gpt-5.4-mini
+  api_key: ${OPENAI_API_KEY}  # or set OPENAI_API_KEY in the environment
+  base_url: https://api.openai.com/v1  # omit for default; set for compatible providers
 ```
+
+You can override `llm.model` with `--model <model>` on `book-run`. The API key can come from `llm.api_key` or the `OPENAI_API_KEY` environment variable, with config taking precedence. `llm.base_url` defaults to `$OPENAI_BASE_URL` when unset.
 
 The real API integration test is gated separately:
 
