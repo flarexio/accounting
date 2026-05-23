@@ -43,9 +43,11 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
-// LLM holds the OpenAI model default; --model overrides it.
+// LLM holds the reasoning engine configuration.
 type LLM struct {
-	Model string `yaml:"model"`
+	Model   string `yaml:"model"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
 }
 
 // Embedding holds the embedding model used by the postgres adapter to populate
