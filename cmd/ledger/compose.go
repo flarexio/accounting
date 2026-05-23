@@ -107,13 +107,15 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 }
 
 // buildBookEngine wires the OpenAI bookkeeper reasoning engine.
-func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
 		return nil, fmt.Errorf("book-run: openai engine: %w", err)
 	}
 	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
-		Model:        model,
+		APIKey:       llmCfg.APIKey,
+		BaseURL:      llmCfg.BaseURL,
+		Model:        llmCfg.Model,
 		OutputFormat: openai.OutputFormatJSONObject,
 		Renderer:     renderer,
 	})
