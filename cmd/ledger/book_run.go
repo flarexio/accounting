@@ -13,6 +13,7 @@ import (
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/agent"
 	"github.com/flarexio/accounting/bookkeeping"
+	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -33,8 +34,9 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Description: "Connects to the ledger seeded by `ledger seed`, runs the agent.Bookkeeper\n" +
 			"loop against --request, and prints a JSON report to stdout. The binary\n" +
 			"reads config.yaml from --work-dir, defaulting to ~/.flarex/accounting;\n" +
-			"the file must exist. The reasoning engine is OpenAI, so OPENAI_API_KEY\n" +
-			"must be set; --model overrides config.yaml llm.model.",
+			"the file must exist. The reasoning engine is OpenAI-compatible; set\n" +
+			"llm.api_key in config or export OPENAI_API_KEY. --model overrides\n" +
+			"config.yaml llm.model.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -72,11 +74,12 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	if model == "" {
-		model = cfg.LLM.Model
+	llmCfg := cfg.LLM
+	if model != "" {
+		llmCfg.Model = model
 	}
 
-	if err := validateOpenAIConfig(model); err != nil {
+	if err := validateOpenAIConfig(llmCfg); err != nil {
 		return err
 	}
 
@@ -100,7 +103,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, repo, model)
+	engine, err := buildBookEngine(ctx, repo, llmCfg)
 	if err != nil {
 		return err
 	}
@@ -131,13 +134,13 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return runErr
 }
 
-// validateOpenAIConfig ensures model and OPENAI_API_KEY are present.
-func validateOpenAIConfig(model string) error {
-	if model == "" {
+// validateOpenAIConfig ensures model and an API key source are present.
+func validateOpenAIConfig(llmCfg config.LLM) error {
+	if llmCfg.Model == "" {
 		return errors.New("book-run: openai engine requires --model or config.yaml llm.model")
 	}
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		return errors.New("book-run: openai engine requires OPENAI_API_KEY")
+	if llmCfg.APIKey == "" && os.Getenv("OPENAI_API_KEY") == "" {
+		return errors.New("book-run: openai engine requires config.yaml llm.api_key or OPENAI_API_KEY")
 	}
 	return nil
 }

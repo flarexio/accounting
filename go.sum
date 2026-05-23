@@ -44,8 +44,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
-github.com/flarexio/stoa v1.0.1 h1:kzZx/n6n8hi/C1uTM+E5y3A9R51irvFHdMiNtsNSOSE=
-github.com/flarexio/stoa v1.0.1/go.mod h1:GJnYrdy8kcq+yLl4HQxnSq1EcCCLZOTl7kj2uZBARzg=
+github.com/flarexio/stoa v1.0.2 h1:xpxmY4EEFUY1ZX5hw6TldRbLPDKYhhLBOgzFqsqINJw=
+github.com/flarexio/stoa v1.0.2/go.mod h1:GJnYrdy8kcq+yLl4HQxnSq1EcCCLZOTl7kj2uZBARzg=
 github.com/gorilla/css v1.0.1 h1:ntNaBIghp6JmvWnxbZKANoLyuXTPZ4cAMlo6RyhlbO8=
 github.com/gorilla/css v1.0.1/go.mod h1:BvnYkspnSzMmwRK+b8/xgNPLiIuNZr6vbZBTPQ2A3b0=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=

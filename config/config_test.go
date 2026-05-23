@@ -169,6 +169,56 @@ func TestLoad_MissingFile(t *testing.T) {
 	}
 }
 
+func TestLoad_LLMFullConfig(t *testing.T) {
+	body := `llm:
+  model: gpt-5.4-mini
+  api_key: sk-test-key
+  base_url: https://api.openai.com/v1
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.LLM.Model != "gpt-5.4-mini" {
+		t.Errorf("model: got %q, want gpt-5.4-mini", cfg.LLM.Model)
+	}
+	if cfg.LLM.APIKey != "sk-test-key" {
+		t.Errorf("api_key: got %q, want sk-test-key", cfg.LLM.APIKey)
+	}
+	if cfg.LLM.BaseURL != "https://api.openai.com/v1" {
+		t.Errorf("base_url: got %q, want https://api.openai.com/v1", cfg.LLM.BaseURL)
+	}
+}
+
+func TestLoad_LLMConfigDefaultsEmpty(t *testing.T) {
+	// Fields not in the YAML must stay empty so Stoa can apply its env fallback.
+	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.LLM.APIKey != "" {
+		t.Errorf("api_key should default to empty, got %q", cfg.LLM.APIKey)
+	}
+	if cfg.LLM.BaseURL != "" {
+		t.Errorf("base_url should default to empty, got %q", cfg.LLM.BaseURL)
+	}
+}
+
+func TestLoad_LLMUnknownFieldRejected(t *testing.T) {
+	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n  engine: openai\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown llm.engine field")
+	}
+	if !strings.Contains(err.Error(), "engine") {
+		t.Errorf("error should mention engine, got %v", err)
+	}
+}
+
 func TestDefaultDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

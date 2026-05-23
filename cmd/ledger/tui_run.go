@@ -20,10 +20,10 @@ func newTUICommand() *cli.Command {
 		Name:  "tui",
 		Usage: "Launch the conversational Bubble Tea terminal UI.",
 		Description: "Launches a conversational terminal UI over the same reason -> validate ->\n" +
-			"execute loop the book-run command uses. Drives a real LLM through the OpenAI\n" +
-			"engine, so OPENAI_API_KEY must be set. The TUI connects to the ledger seeded by\n" +
-			"`ledger seed` and reads the single company from the repository; it never seeds\n" +
-			"on startup and takes no arguments.",
+			"execute loop the book-run command uses. Drives a real LLM through the OpenAI-\n" +
+			"compatible engine; set llm.api_key in config or export OPENAI_API_KEY. The TUI\n" +
+			"connects to the ledger seeded by `ledger seed` and reads the single company from\n" +
+			"the repository; it never seeds on startup and takes no arguments.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "model",
@@ -52,11 +52,11 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 	}
 	comp := tuiComposer{
 		cfg:      cfg,
-		model:    c.String("model"),
+		llmCfg:   cfg.LLM,
 		maxTurns: int(c.Int("max-turns")),
 	}
-	if comp.model == "" {
-		comp.model = cfg.LLM.Model
+	if model := c.String("model"); model != "" {
+		comp.llmCfg.Model = model
 	}
 
 	return tui.Run(ctx, []tui.Option{comp.bookOption()})
@@ -65,7 +65,7 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 // tuiComposer builds the bookkeeper session from config and CLI flags.
 type tuiComposer struct {
 	cfg      *config.Config
-	model    string
+	llmCfg   config.LLM
 	maxTurns int
 }
 
@@ -95,7 +95,7 @@ func (comp tuiComposer) bookOption() tui.Option {
 				repoCloser.Close()
 				return nil, fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
 			}
-			engine, err := buildBookEngine(ctx, repo, comp.model)
+			engine, err := buildBookEngine(ctx, repo, comp.llmCfg)
 			if err != nil {
 				bus.Close()
 				repoCloser.Close()
