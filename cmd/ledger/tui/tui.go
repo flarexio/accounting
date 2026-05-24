@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/flarexio/accounting"
 	"github.com/flarexio/stoa/harness/loop"
 )
 
@@ -15,6 +16,18 @@ type Session interface {
 	// Run executes one turn, streaming cycle events to sink as they happen.
 	Run(ctx context.Context, request string, sink loop.EventSink) (Outcome, error)
 	Close() error
+}
+
+// EntryLookup is implemented by Sessions that can fetch a posted entry; the
+// TUI uses it to render reverse_journal previews from the original lines.
+type EntryLookup interface {
+	LookupEntry(ctx context.Context, entryID string) (accounting.JournalEntry, bool, error)
+}
+
+// AccountLookup is implemented by Sessions that can resolve an account code to
+// its chart-of-accounts row; the TUI uses it to label preview lines by name.
+type AccountLookup interface {
+	LookupAccount(ctx context.Context, code string) (accounting.Account, bool, error)
 }
 
 // Outcome is the non-event summary of a completed turn.

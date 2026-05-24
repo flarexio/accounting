@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/cmd/ledger/tui"
 	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/harness/loop"
@@ -108,6 +109,7 @@ func (comp tuiComposer) bookOption() tui.Option {
 					Publisher: bus,
 					MaxTurns:  comp.maxTurns,
 				},
+				repo:    repo,
 				closers: []io.Closer{bus, repoCloser},
 			}, nil
 		},
@@ -116,7 +118,16 @@ func (comp tuiComposer) bookOption() tui.Option {
 
 type bookSession struct {
 	agent   bookkeeper.Bookkeeper
+	repo    accounting.LedgerRepository
 	closers []io.Closer
+}
+
+func (s *bookSession) LookupEntry(ctx context.Context, entryID string) (accounting.JournalEntry, bool, error) {
+	return s.repo.Entry(ctx, entryID)
+}
+
+func (s *bookSession) LookupAccount(ctx context.Context, code string) (accounting.Account, bool, error) {
+	return s.repo.Account(ctx, code)
 }
 
 func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSink) (tui.Outcome, error) {
