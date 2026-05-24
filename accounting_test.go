@@ -201,7 +201,7 @@ func TestValidator_RejectsInconsistentBranchID(t *testing.T) {
 func TestValidator_RejectsMixedBranchIDs(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
-	intent.Lines[1].Dimensions.BranchID = "tc" // line[0]="hq", line[1]="tc"
+	intent.Lines[1].Dimensions.BranchID = "eu" // line[0]="hq", line[1]="eu" — both known, isolates the mixed-branch check
 	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
 	if err == nil || !strings.Contains(err.Error(), "branch_id") {
 		t.Fatalf("expected mixed branch_id error, got %v", err)
