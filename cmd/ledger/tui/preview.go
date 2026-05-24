@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -80,10 +81,11 @@ func renderJournalPreview(intent *accounting.JournalIntent, accountName accountN
 	}
 	b.WriteString(header)
 
+	lines := debitsFirst(intent.Lines)
 	labelWidth, amountWidth := 0, 0
-	labels := make([]string, len(intent.Lines))
-	amounts := make([]string, len(intent.Lines))
-	for i, l := range intent.Lines {
+	labels := make([]string, len(lines))
+	amounts := make([]string, len(lines))
+	for i, l := range lines {
 		labels[i] = lineLabel(l, accountName)
 		amounts[i] = formatAmount(l.Amount)
 		if w := lipgloss.Width(labels[i]); w > labelWidth {
@@ -94,7 +96,7 @@ func renderJournalPreview(intent *accounting.JournalIntent, accountName accountN
 		}
 	}
 
-	for i, l := range intent.Lines {
+	for i, l := range lines {
 		b.WriteString("\n")
 		label := padRight(labels[i], labelWidth)
 		amount := padLeft(amounts[i], amountWidth)
@@ -105,6 +107,17 @@ func renderJournalPreview(intent *accounting.JournalIntent, accountName accountN
 		}
 	}
 	return b.String()
+}
+
+// debitsFirst returns a copy of lines re-ordered for display: all debits, then
+// all credits, preserving relative order within each side.
+func debitsFirst(lines []accounting.JournalLine) []accounting.JournalLine {
+	out := make([]accounting.JournalLine, len(lines))
+	copy(out, lines)
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Side == accounting.SideDebit && out[j].Side != accounting.SideDebit
+	})
+	return out
 }
 
 func lineLabel(l accounting.JournalLine, accountName accountNameFn) string {

@@ -210,15 +210,36 @@ func TestRenderReversePreviewFlipsSides(t *testing.T) {
 	if !strings.Contains(lines[0], "Reversal of JE-0001") || !strings.Contains(lines[0], "過帳錯誤") {
 		t.Errorf("header missing reversal hint: %q", lines[0])
 	}
-	// Original was Dr,Cr,Cr; the mirror must be Cr (indented), Dr, Dr.
-	if !strings.HasPrefix(lines[1], "       1101 庫存現金") {
-		t.Errorf("line 1 should flip to credit (indented) with name, got %q", lines[1])
+	// Original was Dr,Cr,Cr; flipped is Cr,Dr,Dr but the preview must show
+	// debits first per accounting convention: Dr 4101, Dr 2191, then Cr 1101.
+	if !strings.HasPrefix(lines[1], "  4101 銷貨收入") {
+		t.Errorf("line 1 should be debit (flush-left) with name, got %q", lines[1])
 	}
-	if !strings.HasPrefix(lines[2], "  4101 銷貨收入") {
-		t.Errorf("line 2 should flip to debit with name, got %q", lines[2])
+	if !strings.HasPrefix(lines[2], "  2191 銷項稅額") {
+		t.Errorf("line 2 should be debit (flush-left) with name, got %q", lines[2])
 	}
-	if !strings.HasPrefix(lines[3], "  2191 銷項稅額") {
-		t.Errorf("line 3 should flip to debit with name, got %q", lines[3])
+	if !strings.HasPrefix(lines[3], "       1101 庫存現金") {
+		t.Errorf("line 3 should be credit (indented) with name, got %q", lines[3])
+	}
+}
+
+func TestRenderJournalPreviewSortsDebitsBeforeCredits(t *testing.T) {
+	intent := accounting.JournalIntent{
+		Date:     time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		PeriodID: "2026-05",
+		Currency: "TWD",
+		Lines: []accounting.JournalLine{
+			{AccountCode: "4101", Side: accounting.SideCredit, Amount: 100},
+			{AccountCode: "1101", Side: accounting.SideDebit, Amount: 100},
+		},
+	}
+	preview := renderJournalPreview(&intent, nil)
+	lines := strings.Split(preview, "\n")
+	if !strings.HasPrefix(lines[1], "  1101") {
+		t.Errorf("debit should sort to first line regardless of input order, got %q", lines[1])
+	}
+	if !strings.HasPrefix(lines[2], "       4101") {
+		t.Errorf("credit should sort after debits, got %q", lines[2])
 	}
 }
 
