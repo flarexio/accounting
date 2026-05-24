@@ -55,6 +55,10 @@ func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub EventPublisher
 				return reverse.Execute(ctx, *intent.Reverse)
 			},
 		},
+		IntentReject: {
+			validate: func(_ context.Context, _ Intent) error { return nil },
+			execute:  func(_ context.Context, _ Intent) (accounting.JournalEntry, error) { return accounting.JournalEntry{}, nil },
+		},
 	}}
 }
 

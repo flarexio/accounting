@@ -110,5 +110,23 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 		errs = append(errs, fmt.Errorf("debits (%d) must equal credits (%d)", debits, credits))
 	}
 
+	// branch consistency: all lines must carry the same branch_id, or none at all.
+	branchSet := map[string]struct{}{}
+	for _, line := range intent.Lines {
+		if line.Dimensions.BranchID != "" {
+			branchSet[line.Dimensions.BranchID] = struct{}{}
+		}
+	}
+	if len(branchSet) > 0 {
+		for i, line := range intent.Lines {
+			if line.Dimensions.BranchID == "" {
+				errs = append(errs, fmt.Errorf("line[%d]: branch_id is missing; all lines must carry the same branch_id when any line specifies one", i))
+			}
+		}
+		if len(branchSet) > 1 {
+			errs = append(errs, fmt.Errorf("all lines must carry the same branch_id, got multiple values"))
+		}
+	}
+
 	return errors.Join(errs...)
 }
