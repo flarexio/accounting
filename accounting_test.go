@@ -188,6 +188,26 @@ func TestValidator_RejectsMissingCurrency(t *testing.T) {
 	}
 }
 
+func TestValidator_RejectsInconsistentBranchID(t *testing.T) {
+	repo := awsBillRepo(t)
+	intent := balancedAWSIntent()
+	intent.Lines[1].Dimensions.BranchID = "" // line[0] has "hq", line[1] has none
+	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "branch_id") {
+		t.Fatalf("expected branch_id consistency error, got %v", err)
+	}
+}
+
+func TestValidator_RejectsMixedBranchIDs(t *testing.T) {
+	repo := awsBillRepo(t)
+	intent := balancedAWSIntent()
+	intent.Lines[1].Dimensions.BranchID = "tc" // line[0]="hq", line[1]="tc"
+	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "branch_id") {
+		t.Fatalf("expected mixed branch_id error, got %v", err)
+	}
+}
+
 func TestValidator_NilRepo(t *testing.T) {
 	err := accounting.Validator{}.Validate(context.Background(), balancedAWSIntent())
 	if err == nil {
