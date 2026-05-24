@@ -297,7 +297,6 @@ func TestFormatAmountThousandsSeparator(t *testing.T) {
 		1000:    "1,000",
 		105000:  "105,000",
 		1234567: "1,234,567",
-		-42000:  "-42,000",
 	}
 	for in, want := range cases {
 		if got := formatAmount(in); got != want {

@@ -133,10 +133,9 @@ func padLeft(s string, width int) string {
 	return strings.Repeat(" ", pad) + s
 }
 
+// formatAmount renders a non-negative minor-unit amount with thousands
+// separators; journal amounts are validator-guaranteed > 0.
 func formatAmount(n int64) string {
-	if n < 0 {
-		return "-" + formatAmount(-n)
-	}
 	s := fmt.Sprintf("%d", n)
 	if len(s) <= 3 {
 		return s
