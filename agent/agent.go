@@ -50,6 +50,13 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
+		if intent.Kind == bookkeeping.IntentReject {
+			reason := "request cannot be fulfilled"
+			if intent.Reject != nil && intent.Reject.Reason != "" {
+				reason = intent.Reject.Reason
+			}
+			return llm.Observation{Summary: reason}, nil
+		}
 		entry, err := registry.Execute(ctx, intent)
 		if err != nil {
 			return llm.Observation{}, err
@@ -91,5 +98,6 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 const bookkeeperInstructions = `You are a bookkeeping agent. Choose ONE intent for the requested task and return it as a typed intent:
 - post_journal: post a new journal entry. Include at least two lines with one or more debits and one or more credits; total debit must equal total credit; use only active account codes; reference an open period; use one currency throughout.
 - reverse_journal: reverse an existing posted entry. Give the entry's JE-id and a short reason; the mirror-image entry is built for you.
+- reject: decline a request that cannot be fulfilled; provide a reason. Use this when the user specifies a closed period — do not substitute a different period.
 If validation feedback is present in the message history, fix only the problems it names and resubmit.
 Output JSON only. No prose outside the JSON object.`

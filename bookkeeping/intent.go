@@ -8,6 +8,7 @@ type IntentKind string
 const (
 	IntentPostJournal    IntentKind = "post_journal"
 	IntentReverseJournal IntentKind = "reverse_journal"
+	IntentReject         IntentKind = "reject"
 )
 
 // Intent is the discriminated union the agent's model emits. Kind names the
@@ -17,6 +18,12 @@ type Intent struct {
 	Kind    IntentKind                `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
 	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`
+	Reject  *RejectIntent             `json:"reject,omitempty"`
+}
+
+// RejectIntent is the payload of a reject Intent.
+type RejectIntent struct {
+	Reason string `json:"reason"`
 }
 
 // ReverseIntent is the payload of a reverse_journal Intent.
@@ -37,6 +44,8 @@ const (
 	postJournalArgsShape = `{"date":"2026-05-12T00:00:00Z","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
 
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
+
+	rejectArgsShape = `{"reason":"<explanation why the request cannot be fulfilled>"}`
 )
 
 // Intents returns the descriptor for every IntentKind, ordered by Kind. It is
@@ -53,6 +62,11 @@ func Intents() []IntentDescriptor {
 			Kind:      IntentReverseJournal,
 			Summary:   "Reverse an existing posted entry, named by its JE-id, with a mirror-image entry.",
 			ArgsShape: reverseJournalArgsShape,
+		},
+		{
+			Kind:      IntentReject,
+			Summary:   "Decline a request that cannot be fulfilled; provide a reason.",
+			ArgsShape: rejectArgsShape,
 		},
 	}
 }
