@@ -15,6 +15,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/flarexio/stoa/llm"
+
+	"github.com/flarexio/accounting/bookkeeping"
 )
 
 type viewState int
@@ -35,6 +37,7 @@ const (
 	lineSystem
 	lineError
 	lineTool
+	linePreview
 )
 
 type line struct {
@@ -269,6 +272,50 @@ func (m model) finishTurn(msg turnDoneMsg) (tea.Model, tea.Cmd) {
 
 func (m *model) appendEvent(ev llm.CycleEvent) {
 	m.appendLine(line{kind: eventLineKind(ev.Kind), text: strings.TrimSpace(ev.Content)})
+	if ev.Kind != llm.EventModelOutput {
+		return
+	}
+	intent, ok := parseIntent(ev.Content)
+	if !ok {
+		return
+	}
+	switch intent.Kind {
+	case bookkeeping.IntentPostJournal:
+		if intent.Post != nil {
+			m.appendLine(line{kind: linePreview, text: renderJournalPreview(intent.Post, m.accountNameResolver())})
+		}
+	case bookkeeping.IntentReverseJournal:
+		if intent.Reverse != nil {
+			m.appendReversePreview(*intent.Reverse)
+		}
+	}
+}
+
+func (m *model) appendReversePreview(intent bookkeeping.ReverseIntent) {
+	lookup, ok := m.session.(EntryLookup)
+	if !ok || intent.EntryID == "" {
+		return
+	}
+	entry, found, err := lookup.LookupEntry(m.ctx, intent.EntryID)
+	if err != nil || !found {
+		return
+	}
+	m.appendLine(line{kind: linePreview, text: renderReversePreview(entry, intent.Reason, m.accountNameResolver())})
+}
+
+func (m model) accountNameResolver() accountNameFn {
+	lookup, ok := m.session.(AccountLookup)
+	if !ok {
+		return nil
+	}
+	ctx := m.ctx
+	return func(code string) string {
+		acc, found, err := lookup.LookupAccount(ctx, code)
+		if err != nil || !found {
+			return ""
+		}
+		return acc.Name
+	}
 }
 
 func (m *model) appendLine(l line) {
@@ -340,6 +387,8 @@ func lineMeta(k lineKind) (string, lipgloss.Style) {
 		return "observation", observationStyle
 	case lineTool:
 		return "tool", toolStyle
+	case linePreview:
+		return "preview", previewStyle
 	case lineError:
 		return "error", errorStyle
 	default:
@@ -371,6 +420,9 @@ func (m model) renderBody(l line, width int) string {
 		if out, err := m.md.Render(l.text); err == nil {
 			return strings.Trim(out, "\n")
 		}
+	}
+	if l.kind == linePreview {
+		return l.text
 	}
 	return lipgloss.NewStyle().Width(width).Render(l.text)
 }
