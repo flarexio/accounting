@@ -14,9 +14,9 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error)
+type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error)
 
-func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
+func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
 	return f(ctx, input)
 }
 
@@ -82,11 +82,12 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 	repo := awsBillRepo(t)
 	bus := wireBus(t, repo)
 
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
-		return llm.ReasoningResult[bookkeeping.Intent]{
-			Rationale: "AWS invoice paid on credit card; expense debit, liability credit",
-			Intent:    postIntent(balancedAWSIntent()),
-		}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		return llm.IntentOutput(
+			postIntent(balancedAWSIntent()),
+			nil,
+			"AWS invoice paid on credit card; expense debit, liability credit",
+		), nil
 	})
 
 	agent := agent.Bookkeeper{
@@ -126,16 +127,13 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 	bus := wireBus(t, repo)
 
 	calls := 0
-	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
 		calls++
 		switch calls {
 		case 1:
 			intent := balancedAWSIntent()
 			intent.Lines[1].Amount = 9000
-			return llm.ReasoningResult[bookkeeping.Intent]{
-				Rationale: "first pass: assume $90 surcharge waived",
-				Intent:    postIntent(intent),
-			}, nil
+			return llm.IntentOutput(postIntent(intent), nil, "first pass: assume $90 surcharge waived"), nil
 		default:
 			sawValidationErr := false
 			for _, e := range input.Events {
@@ -146,10 +144,11 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 			if !sawValidationErr {
 				t.Errorf("expected validation_error event on retry, got events %+v", input.Events)
 			}
-			return llm.ReasoningResult[bookkeeping.Intent]{
-				Rationale: "corrected: rebalance credit to match $100 debit",
-				Intent:    postIntent(balancedAWSIntent()),
-			}, nil
+			return llm.IntentOutput(
+				postIntent(balancedAWSIntent()),
+				nil,
+				"corrected: rebalance credit to match $100 debit",
+			), nil
 		}
 	})
 
@@ -175,16 +174,13 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 	bus := wireBus(t, repo)
 
 	calls := 0
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
 		calls++
 		intent := balancedAWSIntent()
 		if calls == 1 {
 			intent.PeriodID = "2026-04"
 		}
-		return llm.ReasoningResult[bookkeeping.Intent]{
-			Rationale: "best guess",
-			Intent:    postIntent(intent),
-		}, nil
+		return llm.IntentOutput(postIntent(intent), nil, "best guess"), nil
 	})
 
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
@@ -201,8 +197,8 @@ func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 	repo := awsBillRepo(t)
 	bus := wireBus(t, repo)
 
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
-		return llm.ReasoningResult[bookkeeping.Intent]{Intent: postIntent(balancedAWSIntent())}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, ""), nil
 	})
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 
@@ -225,17 +221,18 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 	bus := wireBus(t, repo)
 
 	postedID := ""
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
 		if postedID == "" {
-			return llm.ReasoningResult[bookkeeping.Intent]{Intent: postIntent(balancedAWSIntent())}, nil
+			return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, ""), nil
 		}
-		return llm.ReasoningResult[bookkeeping.Intent]{
-			Rationale: "reverse the entry the request names",
-			Intent: bookkeeping.Intent{
+		return llm.IntentOutput(
+			bookkeeping.Intent{
 				Kind:    bookkeeping.IntentReverseJournal,
 				Reverse: &bookkeeping.ReverseIntent{EntryID: postedID, Reason: "duplicate posting"},
 			},
-		}, nil
+			nil,
+			"reverse the entry the request names",
+		), nil
 	})
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 
@@ -269,8 +266,8 @@ func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 	repo := awsBillRepo(t)
 	bus := wireBus(t, repo)
 
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
-		return llm.ReasoningResult[bookkeeping.Intent]{Intent: postIntent(balancedAWSIntent())}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, ""), nil
 	})
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 1}
 
@@ -300,8 +297,8 @@ func TestAgent_MissingEngine(t *testing.T) {
 
 func TestAgent_MissingRepo(t *testing.T) {
 	bus := inproc.NewAccountingBus()
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
-		return llm.ReasoningResult[bookkeeping.Intent]{}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		return llm.ReasoningOutput[bookkeeping.Intent]{}, nil
 	})
 	agent := agent.Bookkeeper{Engine: engine, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
@@ -311,8 +308,8 @@ func TestAgent_MissingRepo(t *testing.T) {
 
 func TestAgent_MissingPublisher(t *testing.T) {
 	repo := awsBillRepo(t)
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
-		return llm.ReasoningResult[bookkeeping.Intent]{}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		return llm.ReasoningOutput[bookkeeping.Intent]{}, nil
 	})
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {

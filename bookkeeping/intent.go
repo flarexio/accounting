@@ -1,6 +1,10 @@
 package bookkeeping
 
-import "github.com/flarexio/accounting"
+import (
+	"encoding/json"
+
+	"github.com/flarexio/accounting"
+)
 
 // IntentKind tags which bookkeeping use case an Intent selects.
 type IntentKind string
@@ -70,3 +74,90 @@ func Intents() []IntentDescriptor {
 		},
 	}
 }
+
+// IntentSchema returns the JSON Schema for the Intent discriminated union, in
+// OpenAI structured-outputs strict form: every property is required, payloads
+// for unused kinds are nullable, no additional properties are allowed. The
+// schema is wrapped by the stoa adapter into the {evidence, rationale, intent}
+// envelope.
+func IntentSchema() json.RawMessage {
+	return json.RawMessage(intentSchemaJSON)
+}
+
+const intentSchemaJSON = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "post_journal", "reverse_journal", "reject"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["post_journal", "reverse_journal", "reject"]
+    },
+    "post_journal": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["date", "period_id", "currency", "description", "lines"],
+          "properties": {
+            "date": { "type": "string", "description": "RFC3339 timestamp inside the chosen period (e.g. 2026-05-12T00:00:00Z)" },
+            "period_id": { "type": "string" },
+            "currency": { "type": "string", "description": "ISO 4217 code (USD, TWD, ...)" },
+            "description": { "type": "string" },
+            "lines": {
+              "type": "array",
+              "description": "At least two lines; total debit must equal total credit.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["account_code", "side", "amount", "memo", "dimensions"],
+                "properties": {
+                  "account_code": { "type": "string" },
+                  "side": { "type": "string", "enum": ["debit", "credit"] },
+                  "amount": { "type": "integer", "description": "Minor currency units, per ISO 4217 exponent." },
+                  "memo": { "type": "string" },
+                  "dimensions": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["branch_id"],
+                    "properties": {
+                      "branch_id": { "type": "string", "description": "Empty string when no branch dimension applies." }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "reverse_journal": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entry_id", "reason"],
+          "properties": {
+            "entry_id": { "type": "string", "description": "JE-id of the posted entry to reverse." },
+            "reason": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "reject": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {
+            "reason": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}`
