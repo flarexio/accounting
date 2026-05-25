@@ -11,6 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.52.0
 	github.com/openai/openai-go v1.12.0
+	github.com/philippgille/chromem-go v0.7.0
 	github.com/urfave/cli/v3 v3.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )

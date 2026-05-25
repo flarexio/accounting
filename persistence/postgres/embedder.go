@@ -7,12 +7,9 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
-)
 
-// Embedder turns text into a fixed-dimension vector for pgvector storage and similarity search.
-type Embedder interface {
-	Embed(ctx context.Context, text string) ([]float32, error)
-}
+	"github.com/flarexio/accounting"
+)
 
 type openAIEmbedder struct {
 	client     openai.Client
@@ -20,8 +17,8 @@ type openAIEmbedder struct {
 	dimensions int64
 }
 
-// NewOpenAIEmbedder builds an Embedder backed by the OpenAI Embeddings API. dimensions must match the schema's vector column width.
-func NewOpenAIEmbedder(model string, dimensions int) Embedder {
+// NewOpenAIEmbedder builds an accounting.Embedder backed by the OpenAI Embeddings API. dimensions must match the schema's vector column width.
+func NewOpenAIEmbedder(model string, dimensions int) accounting.Embedder {
 	return &openAIEmbedder{
 		client:     openai.NewClient(),
 		model:      model,
