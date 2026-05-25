@@ -27,6 +27,10 @@ llm:
   api_key: ${OPENAI_API_KEY}
   # base_url may be omitted for default OpenAI; set for OpenAI-compatible providers.
   base_url: https://api.openai.com/v1
+  # Set true only for llama.cpp-style servers whose grammar engine enforces
+  # response_format at the sampler -- strict json_schema would otherwise block
+  # native tool_calls. Leave false (default) for OpenAI and vLLM.
+  disable_strict_schema_with_tools: false
 
 embedding:
   # Used only by the postgres adapter to populate the accounts.embedding column

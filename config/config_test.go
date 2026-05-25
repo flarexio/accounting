@@ -206,6 +206,26 @@ func TestLoad_LLMConfigDefaultsEmpty(t *testing.T) {
 	if cfg.LLM.BaseURL != "" {
 		t.Errorf("base_url should default to empty, got %q", cfg.LLM.BaseURL)
 	}
+	if cfg.LLM.DisableStrictSchemaWithTools {
+		t.Error("disable_strict_schema_with_tools should default to false")
+	}
+}
+
+func TestLoad_LLMDisableStrictSchemaWithTools(t *testing.T) {
+	body := `llm:
+  model: qwen-3.5-9b
+  base_url: http://localhost:8080/v1
+  disable_strict_schema_with_tools: true
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if !cfg.LLM.DisableStrictSchemaWithTools {
+		t.Error("disable_strict_schema_with_tools: got false, want true")
+	}
 }
 
 func TestLoad_LLMUnknownFieldRejected(t *testing.T) {

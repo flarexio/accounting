@@ -48,6 +48,10 @@ type LLM struct {
 	Model   string `yaml:"model"`
 	APIKey  string `yaml:"api_key"`
 	BaseURL string `yaml:"base_url"`
+	// DisableStrictSchemaWithTools drops strict json_schema response_format on
+	// turns that pass tools. Set true for llama.cpp-style servers whose
+	// grammar engine enforces response_format at the sampler.
+	DisableStrictSchemaWithTools bool `yaml:"disable_strict_schema_with_tools"`
 }
 
 // Embedding holds the embedding model used by the postgres adapter to populate
