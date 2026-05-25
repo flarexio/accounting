@@ -8,6 +8,7 @@ import (
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/stoa/harness/loop"
+	"github.com/flarexio/stoa/llm"
 )
 
 const toolFindAccounts = "find_accounts"
@@ -17,10 +18,36 @@ type findAccountsArgs struct {
 	Type         string `json:"type"`
 }
 
-// accountTools returns the tool handlers the bookkeeping agent exposes.
-func accountTools(repo accounting.LedgerRepository) map[string]loop.ToolHandler {
-	return map[string]loop.ToolHandler{
-		toolFindAccounts: findAccountsHandler(repo),
+// findAccountsArgsSchema is the JSON Schema OpenAI structured-outputs strict
+// mode expects for find_accounts. Both args are required; type may be the
+// empty string to skip the type filter.
+const findAccountsArgsSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name_contains", "type"],
+  "properties": {
+    "name_contains": { "type": "string", "description": "Substring matched case-insensitively against account names." },
+    "type": {
+      "type": "string",
+      "description": "Restrict to one account type; empty string means all types.",
+      "enum": ["", "asset", "liability", "equity", "revenue", "expense"]
+    }
+  }
+}`
+
+// accountTools returns the tool registry the bookkeeping agent exposes. Each
+// tool carries the spec the harness forwards to the provider's native
+// tools/tool_calls channel and the handler that runs when the model invokes it.
+func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
+	return map[string]loop.Tool{
+		toolFindAccounts: {
+			Spec: llm.ToolSpec{
+				Name:        toolFindAccounts,
+				Description: "Search the chart of accounts by case-insensitive name substring; returns only active accounts.",
+				ArgsSchema:  json.RawMessage(findAccountsArgsSchema),
+			},
+			Handler: findAccountsHandler(repo),
+		},
 	}
 }
 

@@ -7,7 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.6
 	charm.land/glamour/v2 v2.0.0
 	charm.land/lipgloss/v2 v2.0.3
-	github.com/flarexio/stoa v1.0.2
+	github.com/flarexio/stoa v1.0.3
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.52.0
 	github.com/openai/openai-go v1.12.0

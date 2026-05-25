@@ -34,7 +34,7 @@ func TestAgent_OpenAI(t *testing.T) {
 	engine, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 		APIKey:       apiKey,
 		Model:        "gpt-5.4-mini",
-		OutputFormat: openai.OutputFormatJSONObject,
+		IntentSchema: bookkeeping.IntentSchema(),
 		Renderer:     renderer,
 	})
 	if err != nil {

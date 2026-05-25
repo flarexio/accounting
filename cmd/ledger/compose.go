@@ -116,7 +116,7 @@ func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmC
 		APIKey:       llmCfg.APIKey,
 		BaseURL:      llmCfg.BaseURL,
 		Model:        llmCfg.Model,
-		OutputFormat: openai.OutputFormatJSONObject,
+		IntentSchema: bookkeeping.IntentSchema(),
 		Renderer:     renderer,
 	})
 	if err != nil {

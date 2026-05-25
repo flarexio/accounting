@@ -99,5 +99,4 @@ const bookkeeperInstructions = `You are a bookkeeping agent. Choose ONE intent f
 - post_journal: post a new journal entry. Include at least two lines with one or more debits and one or more credits; total debit must equal total credit; use only active account codes; reference an open period; use one currency throughout.
 - reverse_journal: reverse an existing posted entry. Give the entry's JE-id and a short reason; the mirror-image entry is built for you.
 - reject: decline a request that cannot be fulfilled; provide a reason. Use this when the user specifies a closed period — do not substitute a different period.
-If validation feedback is present in the message history, fix only the problems it names and resubmit.
-Output JSON only. No prose outside the JSON object.`
+If validation feedback is present in the message history, fix only the problems it names and resubmit.`
