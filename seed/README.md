@@ -1,9 +1,13 @@
 # Ledger seeds
 
-Declarative YAML seed files for the accounting ledger. Each file is an
+Declarative seed files for the accounting ledger. Each file is an
 `accounting.Scenario`: a company with its chart of accounts, branches, and
 accounting periods. This is setup data: it must exist before any journal
 entry is posted.
+
+YAML and JSON are both accepted; `accounting.LoadScenarioFile` picks the
+decoder by extension. `ledger seed` is the primary consumer, but tests and
+benchmarks load the same files directly.
 
 Apply a seed with the `ledger seed` command, which upserts the metadata into
 the repository configured in `config.yaml`:
