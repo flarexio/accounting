@@ -1,0 +1,14 @@
+name: aws_bill_basic_payment
+description: HQ pays the May AWS bill of $1,200 on the company credit card.
+scenario: ../aws_bill.json
+request: "Record the May AWS bill of $1,200 paid by company credit card from HQ."
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: USD
+    lines:
+      - { account_code: "5200", side: debit,  amount: 120000, branch_id: hq }
+      - { account_code: "2100", side: credit, amount: 120000, branch_id: hq }
+options:
+  max_turns: 3

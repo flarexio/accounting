@@ -1,4 +1,8 @@
-package postgres
+// Package openai provides an accounting.Embedder backed by the OpenAI
+// Embeddings API. Persistence adapters and the benchmark runner consume it
+// through the accounting.Embedder interface; they do not import this
+// package's SDK types directly.
+package openai
 
 import (
 	"context"
@@ -11,24 +15,24 @@ import (
 	"github.com/flarexio/accounting"
 )
 
-type openAIEmbedder struct {
+type embedder struct {
 	client     openai.Client
 	model      openai.EmbeddingModel
 	dimensions int64
 }
 
-// NewOpenAIEmbedder builds an accounting.Embedder backed by the OpenAI Embeddings API. dimensions must match the schema's vector column width.
-func NewOpenAIEmbedder(model string, dimensions int) accounting.Embedder {
-	return &openAIEmbedder{
+// NewEmbedder builds an accounting.Embedder backed by the OpenAI Embeddings API. dimensions must match downstream vector storage when one is in use.
+func NewEmbedder(model string, dimensions int) accounting.Embedder {
+	return &embedder{
 		client:     openai.NewClient(),
 		model:      model,
 		dimensions: int64(dimensions),
 	}
 }
 
-func (e *openAIEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (e *embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	if text == "" {
-		return nil, errors.New("postgres: embedder: empty input")
+		return nil, errors.New("openai embedder: empty input")
 	}
 	params := openai.EmbeddingNewParams{
 		Input: openai.EmbeddingNewParamsInputUnion{OfString: param.NewOpt(text)},
@@ -39,10 +43,10 @@ func (e *openAIEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	}
 	resp, err := e.client.Embeddings.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("postgres: embed %q: %w", text, err)
+		return nil, fmt.Errorf("openai embedder: embed %q: %w", text, err)
 	}
 	if len(resp.Data) == 0 {
-		return nil, errors.New("postgres: embed: empty response")
+		return nil, errors.New("openai embedder: empty response")
 	}
 	src := resp.Data[0].Embedding
 	out := make([]float32, len(src))

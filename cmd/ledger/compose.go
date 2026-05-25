@@ -18,6 +18,7 @@ import (
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
 
+	embedopenai "github.com/flarexio/accounting/embedding/openai"
 	natsmsg "github.com/flarexio/accounting/messaging/nats"
 	pgrepo "github.com/flarexio/accounting/persistence/postgres"
 )
@@ -40,7 +41,7 @@ func buildRepository(ctx context.Context, persist config.Persistence, embed conf
 	case config.PersistenceMemory:
 		return memory.NewAccountingRepository(), noopCloser{}, nil
 	case config.PersistencePostgres:
-		embedder := pgrepo.NewOpenAIEmbedder(embed.Model, embed.Dimensions)
+		embedder := embedopenai.NewEmbedder(embed.Model, embed.Dimensions)
 		repo, closer, err := pgrepo.NewAccountingRepository(ctx, persist.Postgres.DSN, embedder)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
