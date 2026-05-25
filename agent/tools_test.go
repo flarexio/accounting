@@ -18,16 +18,27 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	bus := wireBus(t, repo)
 
 	var calls int
-	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
 		calls++
 		if calls == 1 {
-			return llm.ReasoningResult[bookkeeping.Intent]{
-				Rationale: "look up the credit-card account first",
-				ToolCalls: []llm.ToolCall{{
+			specs := input.Tools
+			var sawSpec bool
+			for _, s := range specs {
+				if s.Name == "find_accounts" && len(s.ArgsSchema) > 0 {
+					sawSpec = true
+				}
+			}
+			if !sawSpec {
+				t.Errorf("first turn should receive find_accounts ToolSpec with an ArgsSchema, got %+v", specs)
+			}
+			return llm.ToolCallsOutput[bookkeeping.Intent](
+				[]llm.ToolCall{{
 					Name: "find_accounts",
-					Args: json.RawMessage(`{"name_contains":"credit"}`),
+					Args: json.RawMessage(`{"name_contains":"credit","type":""}`),
 				}},
-			}, nil
+				nil,
+				"look up the credit-card account first",
+			), nil
 		}
 		var sawTool bool
 		for _, ev := range input.Events {
@@ -38,10 +49,7 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 		if !sawTool {
 			t.Error("second turn did not receive the find_accounts result in its events")
 		}
-		return llm.ReasoningResult[bookkeeping.Intent]{
-			Rationale: "post the balanced entry",
-			Intent:    postIntent(balancedAWSIntent()),
-		}, nil
+		return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, "post the balanced entry"), nil
 	})
 
 	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}

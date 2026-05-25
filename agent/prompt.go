@@ -119,19 +119,6 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	b.WriteString("\nAvailable intents -- choose exactly one:\n")
 	b.WriteString(intentsText())
 
-	if toolMode {
-		b.WriteString("\nTool -- find_accounts: search the chart of accounts by name.\n")
-		b.WriteString("  args: " + findAccountsArgsShape + "\n")
-		b.WriteString("\nEach turn, return JSON in ONE of these two shapes.\n")
-		b.WriteString("To look up accounts:\n")
-		b.WriteString(toolCallJSONShape + "\n")
-		b.WriteString("To run a command:\n")
-		b.WriteString(intentEnvelopeShape)
-	} else {
-		b.WriteString("\nReturn JSON with this exact shape:\n")
-		b.WriteString(intentEnvelopeShape)
-	}
-
 	return b.String()
 }
 
@@ -168,19 +155,11 @@ func (r PromptRenderer) activeAccountCount() int {
 	return n
 }
 
-const (
-	findAccountsArgsShape = `{"name_contains":"<text>","type":"<asset|liability|equity|revenue|expense; optional>"}`
-
-	toolCallJSONShape = `{"evidence":[{"source":"request","fact":"..."}],"rationale":"...","tool_calls":[{"name":"find_accounts","args":{"name_contains":"rent"}}]}`
-
-	intentEnvelopeShape = `{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":<one command intent object from the list above>}`
-)
-
 func intentsText() string {
 	var b strings.Builder
 	for _, c := range bookkeeping.Intents() {
 		fmt.Fprintf(&b, "  - %s -- %s\n", c.Kind, c.Summary)
-		fmt.Fprintf(&b, "      intent: {\"kind\":%q,%q:%s}\n", c.Kind, c.Kind, c.ArgsShape)
+		fmt.Fprintf(&b, "      payload: {\"kind\":%q,%q:%s}\n", c.Kind, c.Kind, c.ArgsShape)
 	}
 	return b.String()
 }
@@ -232,4 +211,4 @@ Each turn you choose ONE intent and return it as a typed intent:
 Rules you must follow:
 - If validation feedback is present, fix only the named problems and resubmit.
 - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
-- Output JSON only. No prose outside the JSON object.`
+- When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
