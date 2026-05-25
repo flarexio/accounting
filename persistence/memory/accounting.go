@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/flarexio/accounting"
@@ -21,18 +22,33 @@ type accountingRepository struct {
 	entries  []accounting.JournalEntry
 	entryIdx map[string]int
 	lastSeq  map[string]uint64
+	searcher accounting.AccountSearcher
+}
+
+// Option configures an in-memory repository at construction time.
+type Option func(*accountingRepository)
+
+// WithSearcher routes FindAccounts to s when NameContains is set, and indexes every PutAccount through it.
+func WithSearcher(s accounting.AccountSearcher) Option {
+	return func(r *accountingRepository) { r.searcher = s }
 }
 
 // NewAccountingRepository returns an empty in-memory accounting.LedgerRepository.
-func NewAccountingRepository() accounting.LedgerRepository {
-	return &accountingRepository{
+func NewAccountingRepository(opts ...Option) accounting.LedgerRepository {
+	r := &accountingRepository{
 		accounts: make(map[string]accounting.Account),
 		branches: make(map[string]accounting.Branch),
 		periods:  make(map[string]accounting.Period),
 		entryIdx: make(map[string]int),
 		lastSeq:  make(map[string]uint64),
 	}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
 }
+
+const findAccountsSearcherLimit = 20
 
 func (r *accountingRepository) Account(_ context.Context, code string) (accounting.Account, bool, error) {
 	r.mu.RLock()
@@ -75,8 +91,12 @@ func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account
 	return out, nil
 }
 
-// FindAccounts honors Type and ActiveOnly; NameContains is ignored.
-func (r *accountingRepository) FindAccounts(_ context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+// FindAccounts honors Type and ActiveOnly; NameContains is delegated to the wired AccountSearcher and ignored when none is set.
+func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+	needle := strings.TrimSpace(filter.NameContains)
+	if needle != "" && r.searcher != nil {
+		return r.searcher.Search(ctx, needle, filter, findAccountsSearcherLimit)
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]accounting.Account, 0, len(r.accounts))
@@ -139,10 +159,13 @@ func (r *accountingRepository) SetCompany(_ context.Context, c accounting.Compan
 	return nil
 }
 
-func (r *accountingRepository) PutAccount(_ context.Context, a accounting.Account) error {
+func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.accounts[a.Code] = a
+	r.mu.Unlock()
+	if r.searcher != nil {
+		return r.searcher.Index(ctx, a)
+	}
 	return nil
 }
 
