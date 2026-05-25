@@ -113,11 +113,12 @@ func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmC
 		return nil, fmt.Errorf("book-run: openai engine: %w", err)
 	}
 	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
-		APIKey:       llmCfg.APIKey,
-		BaseURL:      llmCfg.BaseURL,
-		Model:        llmCfg.Model,
-		IntentSchema: bookkeeping.IntentSchema(),
-		Renderer:     renderer,
+		APIKey:                       llmCfg.APIKey,
+		BaseURL:                      llmCfg.BaseURL,
+		Model:                        llmCfg.Model,
+		IntentSchema:                 bookkeeping.IntentSchema(),
+		DisableStrictSchemaWithTools: llmCfg.DisableStrictSchemaWithTools,
+		Renderer:                     renderer,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("book-run: openai engine: %w", err)
