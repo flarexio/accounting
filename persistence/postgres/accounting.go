@@ -19,11 +19,11 @@ import (
 type accountingRepository struct {
 	pool     *pgxpool.Pool
 	q        *pgstore.Queries
-	embedder Embedder
+	embedder accounting.Embedder
 }
 
 // NewAccountingRepository opens a pgxpool.Pool from dsn and returns the LedgerRepository plus its Closer. embedder is required.
-func NewAccountingRepository(ctx context.Context, dsn string, embedder Embedder) (accounting.LedgerRepository, io.Closer, error) {
+func NewAccountingRepository(ctx context.Context, dsn string, embedder accounting.Embedder) (accounting.LedgerRepository, io.Closer, error) {
 	if embedder == nil {
 		return nil, nil, errors.New("postgres: NewAccountingRepository requires a non-nil Embedder")
 	}

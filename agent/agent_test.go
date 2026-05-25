@@ -22,7 +22,7 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 
 func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
-	scenario, err := accounting.LoadScenarioFile("../testdata/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("../seed/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
@@ -35,7 +35,7 @@ func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 
 func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerRepository) {
 	t.Helper()
-	scenario, err := accounting.LoadScenarioFile("../testdata/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("../seed/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}

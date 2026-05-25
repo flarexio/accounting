@@ -13,7 +13,7 @@ import (
 // awsBillRepo: April 2026 closed, May 2026 open, account 5900 inactive.
 func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
-	scenario, err := accounting.LoadScenarioFile("testdata/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("seed/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestValidator_NilRepo(t *testing.T) {
 
 func TestScenarioLoader_SeedsRepository(t *testing.T) {
 	ctx := context.Background()
-	scenario, err := accounting.LoadScenarioFile("testdata/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("seed/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

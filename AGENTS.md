@@ -19,6 +19,7 @@ It is also a [Stoa](https://github.com/flarexio/stoa)-style agent harness: domai
 
 - `ledger seed <seed.yaml | seed-directory>` — apply declarative YAML ledger setup data.
 - `ledger book-run <scenario.{json,yaml}> --request <text>` — run one bookkeeping reasoning cycle and emit a JSON report.
+- `ledger bench --suite <glob> --model <names>` — run the bookkeeping agent over a case suite against one or more models, scored against gold answers; emits a JSON report.
 - `ledger tui <scenario.{json,yaml}> [...]` — Bubble Tea terminal UI over pre-seeded ledger scenarios.
 
 ## Architecture
