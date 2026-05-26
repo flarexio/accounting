@@ -45,17 +45,28 @@ The shared Stoa packages provide the general harness contracts: `github.com/flar
 
 See [docs/architecture.md](docs/architecture.md) for the ledger model, validator invariants, event-driven posting flow, and current out-of-scope boundaries.
 
-## Commands
+## Install
 
-Run commands from the repository root with `go run ./cmd/ledger`:
+Install the `ledger` binary into `$(go env GOBIN)` (or `$(go env GOPATH)/bin` when `GOBIN` is empty); make sure that directory is on your `PATH`.
 
 ```bash
-go run ./cmd/ledger seed seed/taiwan_ledger.yaml
+go install github.com/flarexio/accounting/cmd/ledger@latest
 
-go run ./cmd/ledger book-run \
+# or from a clone of this repository
+go install ./cmd/ledger
+```
+
+The rest of this README assumes `ledger` is on `PATH`. Substitute `go run ./cmd/ledger` for `ledger` if you prefer running from source.
+
+## Commands
+
+```bash
+ledger seed seed/taiwan_ledger.yaml
+
+ledger book-run \
   --request "台北總公司以銀行存款支付中華電信辦公室電話費 NT\$3,150，含 5% 進項稅額 NT\$150。"
 
-go run ./cmd/ledger tui
+ledger tui
 ```
 
 `seed` applies one YAML/JSON scenario file (or every `*.yaml` / `*.yml` file in a directory) to the configured repository -- the company, chart of accounts, branches, and periods.
@@ -108,6 +119,32 @@ The real API integration test is gated separately:
 ```bash
 ACCOUNTING_RUN_OPENAI_TESTS=1 go test ./agent
 ```
+
+## Benchmarks
+
+`ledger bench` runs the bookkeeper over fixed scenarios with known answers and scores each (case, model) iteration, so different models can be compared on the same task. Case files live in [`seed/bench/`](seed/bench/):
+
+| Case | Scenario | Tests |
+|---|---|---|
+| `aws_bill_basic_payment` | `aws_bill` | USD 2-line credit-card payment (hq) |
+| `taiwan_purchase_with_tax` | `taiwan_ledger` | 3-line purchase with 5% input VAT (hq) |
+| `taiwan_sale_with_tax` | `taiwan_ledger` | 3-line sale with 5% output VAT (hq) |
+| `taiwan_payroll_with_withholdings` | `taiwan_ledger` | 3-line payroll with labor/health insurance withholdings (hq) |
+| `taiwan_rent_taichung` | `taiwan_ledger` | 2-line rent posting to the Taichung branch (tc) |
+| `taiwan_utility_kaohsiung` | `taiwan_ledger` | 2-line utility posting to the Kaohsiung branch (ks) |
+| `taiwan_closed_period_reject` | `taiwan_ledger` | request targets a closed period → reject |
+
+Run a suite against one or more models:
+
+```bash
+ledger bench \
+  --suite 'seed/bench/taiwan_*.case.yaml' \
+  --model gpt-5.5 \
+  --repeats 3 \
+  --out bench-taiwan.json
+```
+
+`--suite` and `--model` accept repeated flags, comma-separated values, and glob patterns. The runner reuses `llm.api_key` and `llm.base_url` from `config.yaml`; pass `--no-vector-search` to skip the chromem-go account searcher.
 
 ## Tests
 

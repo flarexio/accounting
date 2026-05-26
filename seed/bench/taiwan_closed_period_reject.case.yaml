@@ -1,0 +1,8 @@
+name: taiwan_closed_period_reject
+description: 使用者要求把交易補登在已關帳的 2026-04 期間，agent 應 reject。
+scenario: ../taiwan_ledger.yaml
+request: "請幫我把 2026 年 4 月台北總公司購買文具用品 NT$2,000 的支出補登進帳。"
+gold:
+  kind: reject
+options:
+  max_turns: 3
