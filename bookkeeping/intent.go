@@ -45,7 +45,7 @@ type IntentDescriptor struct {
 }
 
 const (
-	postJournalArgsShape = `{"date":"2026-05-12T00:00:00Z","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
+	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
 
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
 
@@ -101,7 +101,7 @@ const intentSchemaJSON = `{
           "additionalProperties": false,
           "required": ["date", "period_id", "currency", "description", "lines"],
           "properties": {
-            "date": { "type": "string", "description": "RFC3339 timestamp inside the chosen period (e.g. 2026-05-12T00:00:00Z)" },
+            "date": { "type": "string", "description": "Business date in the company's timezone, format YYYY-MM-DD (e.g. 2026-05-12), inside the chosen period" },
             "period_id": { "type": "string" },
             "currency": { "type": "string", "description": "ISO 4217 code (USD, TWD, ...)" },
             "description": { "type": "string" },

@@ -3,7 +3,6 @@ package benchmark_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/benchmark"
@@ -23,7 +22,7 @@ func goldIntent() bookkeeping.Intent {
 	return bookkeeping.Intent{
 		Kind: bookkeeping.IntentPostJournal,
 		Post: &accounting.JournalIntent{
-			Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),
+			Date:        accounting.NewDate(2026, 5, 12),
 			PeriodID:    "2026-05",
 			Currency:    "USD",
 			Description: "AWS bill",

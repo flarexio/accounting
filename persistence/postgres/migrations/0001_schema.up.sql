@@ -1,11 +1,14 @@
--- 0001_journal_schema.up.sql
+-- 0001_schema.up.sql
 --
 -- Initial projection schema for accounting.LedgerRepository.
 --
--- The journal tables are append-only: rows are written exactly once by
--- the JournalPosted handler. Seeded chart-of-accounts, branches, and
+-- The journal tables are append-only: rows are written exactly once by the
+-- JournalPosted handler. Seeded chart-of-accounts, branches, companies, and
 -- periods are mutated only by the Scenario seeder, which is itself an
 -- out-of-band operation.
+--
+-- entry_date and period boundaries are business dates (DATE) interpreted in
+-- the company's timezone; posted_at is a real instant (TIMESTAMPTZ).
 
 CREATE TABLE accounts (
     code   TEXT PRIMARY KEY,
@@ -19,18 +22,23 @@ CREATE TABLE branches (
     name TEXT NOT NULL
 );
 
+CREATE TABLE companies (
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    timezone TEXT NOT NULL
+);
+
 CREATE TABLE periods (
     id       TEXT PRIMARY KEY,
-    start_at TIMESTAMPTZ NOT NULL,
-    end_at   TIMESTAMPTZ NOT NULL,
+    start_on DATE NOT NULL,
+    end_on   DATE NOT NULL,
     status   TEXT NOT NULL
 );
 
--- subject_offsets carries the per-subject high-water sequence the
--- repository reports through LastSequence. The handler advances it in
--- the same transaction that inserts the entry, so a concurrent
--- LastSequence reader can never observe an entry without also observing
--- its sequence.
+-- subject_offsets carries the per-subject high-water sequence the repository
+-- reports through LastSequence. The handler advances it in the same
+-- transaction that inserts the entry, so a concurrent LastSequence reader
+-- can never observe an entry without also observing its sequence.
 CREATE TABLE subject_offsets (
     subject       TEXT PRIMARY KEY,
     last_sequence BIGINT NOT NULL
@@ -40,7 +48,7 @@ CREATE TABLE journal_entries (
     id          TEXT PRIMARY KEY,
     sequence    BIGINT NOT NULL,
     subject     TEXT NOT NULL,
-    entry_date  TIMESTAMPTZ NOT NULL,
+    entry_date  DATE NOT NULL,
     period_id   TEXT NOT NULL,
     currency    TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',

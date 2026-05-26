@@ -69,7 +69,7 @@ type accountNameFn func(code string) string
 func renderJournalPreview(intent *accounting.JournalIntent, accountName accountNameFn) string {
 	var b strings.Builder
 
-	header := intent.Date.Format("2006-01-02")
+	header := intent.Date.String()
 	if intent.PeriodID != "" {
 		header += " · " + intent.PeriodID
 	}

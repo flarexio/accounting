@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -35,7 +36,7 @@ func NewAccountingRepository(ctx context.Context, dsn string, embedder accountin
 }
 
 func (r *accountingRepository) Company(ctx context.Context) (accounting.Company, bool, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name FROM companies LIMIT 2`)
+	rows, err := r.pool.Query(ctx, `SELECT id, name, timezone FROM companies LIMIT 2`)
 	if err != nil {
 		return accounting.Company{}, false, fmt.Errorf("postgres: Company: %w", err)
 	}
@@ -43,7 +44,7 @@ func (r *accountingRepository) Company(ctx context.Context) (accounting.Company,
 	var companies []accounting.Company
 	for rows.Next() {
 		var c accounting.Company
-		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.TimeZone); err != nil {
 			return accounting.Company{}, false, fmt.Errorf("postgres: scan company: %w", err)
 		}
 		companies = append(companies, c)
@@ -63,9 +64,9 @@ func (r *accountingRepository) Company(ctx context.Context) (accounting.Company,
 
 func (r *accountingRepository) SetCompany(ctx context.Context, c accounting.Company) error {
 	if _, err := r.pool.Exec(ctx, `
-INSERT INTO companies (id, name) VALUES ($1, $2)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-`, c.ID, c.Name); err != nil {
+INSERT INTO companies (id, name, timezone) VALUES ($1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, timezone = EXCLUDED.timezone
+`, c.ID, c.Name, c.TimeZone); err != nil {
 		return fmt.Errorf("postgres: SetCompany: %w", err)
 	}
 	return nil
@@ -293,8 +294,8 @@ SET name = EXCLUDED.name,
 func (r *accountingRepository) PutPeriod(ctx context.Context, p accounting.Period) error {
 	if err := r.q.UpsertPeriod(ctx, pgstore.UpsertPeriodParams{
 		ID:      p.ID,
-		StartAt: pgtype.Timestamptz{Time: p.Start, Valid: true},
-		EndAt:   pgtype.Timestamptz{Time: p.End, Valid: true},
+		StartOn: pgtype.Date{Time: p.Start.Time(time.UTC), Valid: true},
+		EndOn:   pgtype.Date{Time: p.End.Time(time.UTC), Valid: true},
 		Status:  string(p.Status),
 	}); err != nil {
 		return fmt.Errorf("postgres: UpsertPeriod: %w", err)
@@ -329,7 +330,7 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 		ID:          entry.ID,
 		Sequence:    int64(evt.Sequence),
 		Subject:     evt.Subject,
-		EntryDate:   pgtype.Timestamptz{Time: entry.Date, Valid: true},
+		EntryDate:   pgtype.Date{Time: entry.Date.Time(time.UTC), Valid: true},
 		PeriodID:    entry.PeriodID,
 		Currency:    entry.Currency,
 		Description: entry.Description,
@@ -402,8 +403,8 @@ func branchFromRow(row pgstore.Branch) accounting.Branch {
 func periodFromRow(row pgstore.Period) accounting.Period {
 	return accounting.Period{
 		ID:     row.ID,
-		Start:  row.StartAt.Time,
-		End:    row.EndAt.Time,
+		Start:  accounting.DateOf(row.StartOn.Time, time.UTC),
+		End:    accounting.DateOf(row.EndOn.Time, time.UTC),
 		Status: accounting.PeriodStatus(row.Status),
 	}
 }
@@ -411,7 +412,7 @@ func periodFromRow(row pgstore.Period) accounting.Period {
 func entryFromRow(row pgstore.JournalEntry) accounting.JournalEntry {
 	return accounting.JournalEntry{
 		ID:          row.ID,
-		Date:        row.EntryDate.Time,
+		Date:        accounting.DateOf(row.EntryDate.Time, time.UTC),
 		PeriodID:    row.PeriodID,
 		Currency:    row.Currency,
 		Description: row.Description,

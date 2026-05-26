@@ -4,6 +4,7 @@ description: "東昇商貿股份有限公司月結帳:依《商業會計處理�
 company:
   id: dongsheng
   name: 東昇商貿股份有限公司
+  timezone: Asia/Taipei
 
 accounts:
   - { code: "1101", name: 庫存現金, type: asset, active: true }
@@ -66,6 +67,6 @@ branches:
   - { id: ks, name: 高雄營業所 }
 
 periods:
-  - { id: "2026-03", start: 2026-03-01T00:00:00Z, end: 2026-03-31T23:59:59Z, status: closed }
-  - { id: "2026-04", start: 2026-04-01T00:00:00Z, end: 2026-04-30T23:59:59Z, status: closed }
-  - { id: "2026-05", start: 2026-05-01T00:00:00Z, end: 2026-05-31T23:59:59Z, status: open }
+  - { id: "2026-03", start: "2026-03-01", end: "2026-03-31", status: closed }
+  - { id: "2026-04", start: "2026-04-01", end: "2026-04-30", status: closed }
+  - { id: "2026-05", start: "2026-05-01", end: "2026-05-31", status: open }

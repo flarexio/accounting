@@ -15,7 +15,7 @@ func sampleEntry(id string, seq uint64) accounting.JournalPosted {
 		Sequence: seq,
 		Entry: accounting.JournalEntry{
 			ID:          id,
-			Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),
+			Date:        accounting.NewDate(2026, 5, 12),
 			PeriodID:    "2026-05",
 			Currency:    "USD",
 			Description: "AWS bill",

@@ -59,7 +59,7 @@ func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBu
 
 func balancedAWSIntent() accounting.JournalIntent {
 	return accounting.JournalIntent{
-		Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 12),
 		PeriodID:    "2026-05",
 		Currency:    "USD",
 		Description: "Paid AWS bill on company credit card",
