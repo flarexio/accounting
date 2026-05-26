@@ -39,15 +39,15 @@ func TestLoad_EmptyFileDefaultsToInProcess(t *testing.T) {
 }
 
 func TestLoad_LLMModelParsed(t *testing.T) {
-	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n")
+	path := writeConfig(t, "llm:\n  model: gpt-5.5\n")
 
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.LLM.Model != "gpt-5.4-mini" {
-		t.Errorf("llm model: want gpt-5.4-mini, got %q", cfg.LLM.Model)
+	if cfg.LLM.Model != "gpt-5.5" {
+		t.Errorf("llm model: want gpt-5.5, got %q", cfg.LLM.Model)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestLoad_MissingFile(t *testing.T) {
 
 func TestLoad_LLMFullConfig(t *testing.T) {
 	body := `llm:
-  model: gpt-5.4-mini
+  model: gpt-5.5
   api_key: sk-test-key
   base_url: https://api.openai.com/v1
 `
@@ -181,8 +181,8 @@ func TestLoad_LLMFullConfig(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.LLM.Model != "gpt-5.4-mini" {
-		t.Errorf("model: got %q, want gpt-5.4-mini", cfg.LLM.Model)
+	if cfg.LLM.Model != "gpt-5.5" {
+		t.Errorf("model: got %q, want gpt-5.5", cfg.LLM.Model)
 	}
 	if cfg.LLM.APIKey != "sk-test-key" {
 		t.Errorf("api_key: got %q, want sk-test-key", cfg.LLM.APIKey)
@@ -194,7 +194,7 @@ func TestLoad_LLMFullConfig(t *testing.T) {
 
 func TestLoad_LLMConfigDefaultsEmpty(t *testing.T) {
 	// Fields not in the YAML must stay empty so Stoa can apply its env fallback.
-	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n")
+	path := writeConfig(t, "llm:\n  model: gpt-5.5\n")
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -229,7 +229,7 @@ func TestLoad_LLMDisableStrictSchemaWithTools(t *testing.T) {
 }
 
 func TestLoad_LLMUnknownFieldRejected(t *testing.T) {
-	path := writeConfig(t, "llm:\n  model: gpt-5.4-mini\n  engine: openai\n")
+	path := writeConfig(t, "llm:\n  model: gpt-5.5\n  engine: openai\n")
 	_, err := config.Load(path)
 	if err == nil {
 		t.Fatal("expected error for unknown llm.engine field")

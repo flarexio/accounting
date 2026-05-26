@@ -72,7 +72,7 @@ func TestRunBook_RequiresAPIKey(t *testing.T) {
 	seedInProcessConfig(t)
 	t.Setenv("OPENAI_API_KEY", "")
 	var stdout, stderr bytes.Buffer
-	args := []string{"--request", "x", "--model", "gpt-5.4-mini"}
+	args := []string{"--request", "x", "--model", "gpt-5.5"}
 	err := runBookCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error without OPENAI_API_KEY")
@@ -97,7 +97,7 @@ func TestRunBook_RequiresModel(t *testing.T) {
 }
 
 const llmModelConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n" +
-	"llm:\n  model: gpt-5.4-mini\n"
+	"llm:\n  model: gpt-5.5\n"
 
 func TestRunBook_ConfigLLMModelUsed(t *testing.T) {
 	// With config llm.model set and no --model flag, validation should pass
