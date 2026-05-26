@@ -64,10 +64,13 @@ type Account struct {
 	Active bool        `json:"active" yaml:"active"`
 }
 
-// Branch is a reporting dimension within the single ledger.
+// Branch is a reporting dimension within the single ledger. Position drives
+// display order; Scenario.Seed fills it from the seed file's array index when
+// callers leave it zero.
 type Branch struct {
-	ID   string `json:"id" yaml:"id"`
-	Name string `json:"name" yaml:"name"`
+	ID       string `json:"id" yaml:"id"`
+	Name     string `json:"name" yaml:"name"`
+	Position int    `json:"position,omitempty" yaml:"position,omitempty"`
 }
 
 // Period is an accounting period. Closed periods cannot accept postings.

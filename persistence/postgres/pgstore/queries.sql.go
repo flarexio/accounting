@@ -30,7 +30,7 @@ func (q *Queries) GetAccount(ctx context.Context, code string) (Account, error) 
 }
 
 const getBranch = `-- name: GetBranch :one
-SELECT id, name
+SELECT id, name, position
 FROM branches
 WHERE id = $1
 `
@@ -38,7 +38,7 @@ WHERE id = $1
 func (q *Queries) GetBranch(ctx context.Context, id string) (Branch, error) {
 	row := q.db.QueryRow(ctx, getBranch, id)
 	var i Branch
-	err := row.Scan(&i.ID, &i.Name)
+	err := row.Scan(&i.ID, &i.Name, &i.Position)
 	return i, err
 }
 
@@ -194,9 +194,9 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listBranches = `-- name: ListBranches :many
-SELECT id, name
+SELECT id, name, position
 FROM branches
-ORDER BY id
+ORDER BY position, id
 `
 
 func (q *Queries) ListBranches(ctx context.Context) ([]Branch, error) {
@@ -208,7 +208,7 @@ func (q *Queries) ListBranches(ctx context.Context) ([]Branch, error) {
 	var items []Branch
 	for rows.Next() {
 		var i Branch
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Position); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -384,19 +384,21 @@ func (q *Queries) UpsertAccount(ctx context.Context, arg UpsertAccountParams) er
 }
 
 const upsertBranch = `-- name: UpsertBranch :exec
-INSERT INTO branches (id, name)
-VALUES ($1, $2)
+INSERT INTO branches (id, name, position)
+VALUES ($1, $2, $3)
 ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name
+SET name = EXCLUDED.name,
+    position = EXCLUDED.position
 `
 
 type UpsertBranchParams struct {
-	ID   string
-	Name string
+	ID       string
+	Name     string
+	Position int32
 }
 
 func (q *Queries) UpsertBranch(ctx context.Context, arg UpsertBranchParams) error {
-	_, err := q.db.Exec(ctx, upsertBranch, arg.ID, arg.Name)
+	_, err := q.db.Exec(ctx, upsertBranch, arg.ID, arg.Name, arg.Position)
 	return err
 }
 

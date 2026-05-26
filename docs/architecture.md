@@ -22,15 +22,17 @@ The bookkeeping layer does not mutate the projection directly. Producers validat
 
 | Concept | Type | Notes |
 | --- | --- | --- |
-| Company | `accounting.Company` | Legal entity that owns the ledger. |
+| Company | `accounting.Company` | Legal entity that owns the ledger; carries an IANA `TimeZone` (e.g. `Asia/Taipei`) used to interpret business dates. |
 | Chart of accounts | `accounting.Account` | Active accounts can receive new postings. |
-| Accounting period | `accounting.Period` | Closed periods reject postings. |
-| Journal entry | `accounting.JournalEntry` | Posted immutable entry. |
+| Accounting period | `accounting.Period` | Closed periods reject postings. `Start` and `End` are calendar dates (inclusive) in the company's timezone. |
+| Journal entry | `accounting.JournalEntry` | Posted immutable entry. `Date` is the business date (`accounting.Date`, `YYYY-MM-DD`); `PostedAt` is the UTC instant it was written. |
 | Journal line | `accounting.JournalLine` | One debit or credit; amount is stored in minor currency units. |
-| Branch dimension | `accounting.Dimensions.BranchID` | Reporting tag on a line, not a separate ledger. |
+| Branch dimension | `accounting.Dimensions.BranchID` | Reporting tag on a line, not a separate ledger. Required on every line; single-location companies seed one called `main`. |
 | Future dimensions | `accounting.Dimensions.Tags` | Open-ended tags for project, department, channel, or similar reporting dimensions. |
 
 Amounts use `int64` minor units so balance checks are exact and never depend on floating-point comparison.
+
+Dates and instants are different types on purpose. `accounting.Date` (year/month/day) maps to Postgres `DATE` for `JournalEntry.Date`, `JournalIntent.Date`, and `Period.Start/End` — these are calendar dates whose meaning depends on the company's timezone, not absolute moments. `time.Time` over `TIMESTAMPTZ` is reserved for real instants (`PostedAt`). Crossing the boundary requires an explicit `*time.Location`, available from `Company.Location()`.
 
 ## Invariants
 
@@ -43,7 +45,8 @@ Amounts use `int64` minor units so balance checks are exact and never depend on 
 - each line amount is positive
 - each line side is debit or credit
 - each line references an existing active account
-- branch dimensions, when present, reference a known branch
+- each line carries a branch_id that references a known branch
+- all lines on one entry share the same branch_id
 - total debit equals total credit
 
 `Validator.Validate` joins violations so one feedback cycle can give the model enough information to correct multiple mistakes at once.
@@ -70,6 +73,8 @@ A posted `JournalEntry` is immutable. Corrections are represented as new journal
 ## Branches
 
 Branches are reporting dimensions on journal lines. They share the same ledger and are validated as known dimensions. They are deliberately not separate ledger instances, which prevents branch-level shadow accounting from appearing inside the core model.
+
+Every journal line must carry a `branch_id`, and all lines on one entry must share it. A scenario with zero branches is rejected at seed time; single-location companies are expected to seed one branch with `id: main`. The TUI picks the operator's current branch at startup (one `Option` per branch) and threads it into `PromptRenderer.OperatorBranchID`, which adds a "default to this branch" hint to the system prompt; the validator still enforces the invariant regardless of where the value came from.
 
 ## Stoa Harness Boundary
 

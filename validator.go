@@ -94,7 +94,9 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 			}
 		}
 
-		if line.Dimensions.BranchID != "" {
+		if line.Dimensions.BranchID == "" {
+			errs = append(errs, fmt.Errorf("%s: branch_id is required", label))
+		} else {
 			_, ok, err := v.Repo.Branch(ctx, line.Dimensions.BranchID)
 			if err != nil {
 				return fmt.Errorf("accounting: load branch %q: %w", line.Dimensions.BranchID, err)
@@ -109,22 +111,14 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 		errs = append(errs, fmt.Errorf("debits (%d) must equal credits (%d)", debits, credits))
 	}
 
-	// branch consistency: all lines must carry the same branch_id, or none at all.
 	branchSet := map[string]struct{}{}
 	for _, line := range intent.Lines {
 		if line.Dimensions.BranchID != "" {
 			branchSet[line.Dimensions.BranchID] = struct{}{}
 		}
 	}
-	if len(branchSet) > 0 {
-		for i, line := range intent.Lines {
-			if line.Dimensions.BranchID == "" {
-				errs = append(errs, fmt.Errorf("line[%d]: branch_id is missing; all lines must carry the same branch_id when any line specifies one", i))
-			}
-		}
-		if len(branchSet) > 1 {
-			errs = append(errs, fmt.Errorf("all lines must carry the same branch_id, got multiple values"))
-		}
+	if len(branchSet) > 1 {
+		errs = append(errs, fmt.Errorf("all lines must carry the same branch_id, got multiple values"))
 	}
 
 	return errors.Join(errs...)

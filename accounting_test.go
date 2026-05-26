@@ -187,13 +187,25 @@ func TestValidator_RejectsMissingCurrency(t *testing.T) {
 	}
 }
 
-func TestValidator_RejectsInconsistentBranchID(t *testing.T) {
+func TestValidator_RejectsMissingBranchID(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
-	intent.Lines[1].Dimensions.BranchID = "" // line[0] has "hq", line[1] has none
+	intent.Lines[1].Dimensions.BranchID = ""
 	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
-	if err == nil || !strings.Contains(err.Error(), "branch_id") {
-		t.Fatalf("expected branch_id consistency error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "branch_id is required") {
+		t.Fatalf("expected missing branch_id error, got %v", err)
+	}
+}
+
+func TestValidator_RejectsAllLinesWithoutBranchID(t *testing.T) {
+	repo := awsBillRepo(t)
+	intent := balancedAWSIntent()
+	for i := range intent.Lines {
+		intent.Lines[i].Dimensions.BranchID = ""
+	}
+	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "branch_id is required") {
+		t.Fatalf("expected missing branch_id error, got %v", err)
 	}
 }
 

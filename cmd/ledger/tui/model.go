@@ -99,6 +99,9 @@ func newModel(ctx context.Context, options []Option) model {
 }
 
 func (m model) Init() tea.Cmd {
+	if len(m.options) == 1 {
+		return tea.Batch(textinput.Blink, m.startSession(m.options[0]))
+	}
 	return textinput.Blink
 }
 
@@ -435,6 +438,8 @@ func (m model) View() tea.View {
 	case m.err != nil:
 		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
 			footerStyle.Render("ctrl+c quit")
+	case m.state == stateSelect && len(m.options) == 1:
+		content = "Connecting to ledger..."
 	case m.state == stateSelect:
 		content = m.selectView()
 	default:
@@ -447,7 +452,7 @@ func (m model) View() tea.View {
 
 func (m model) selectView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Accounting - choose an agent + scenario"))
+	b.WriteString(titleStyle.Render("Accounting - choose your working branch"))
 	b.WriteString("\n\n")
 	for i, opt := range m.options {
 		cursor := "  "
