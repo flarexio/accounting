@@ -32,9 +32,9 @@ func (m ModelConfig) DisplayName() string {
 	return m.Model
 }
 
-// EngineFactory builds a reasoning engine for one (repo, model) pair. The
-// runner calls it per iteration so each run gets a fresh adapter bound to
-// the freshly-seeded repository.
+// EngineFactory builds a reasoning engine bound to one repo and model. The
+// runner calls it once per (scenario, model), so the adapter snapshots the
+// chart once and is reused across every case and iteration in that group.
 type EngineFactory func(ctx context.Context, repo accounting.LedgerRepository, m ModelConfig) (llm.ReasoningEngine[bookkeeping.Intent], error)
 
 // Runner executes Cases against Models for Repeats iterations each.
@@ -61,7 +61,10 @@ type RunResult struct {
 
 // Run executes every (case, model, iteration) sequentially and returns one
 // RunResult per cell. A failure in one run is captured in RunResult.Error
-// and does not abort the rest of the suite.
+// and does not abort the rest of the suite. Cases that share a scenario file
+// share one seeded repository and one engine per model, so chart-of-accounts
+// embeddings and adapter setup are paid once per scenario rather than per
+// case; only the posted journals are cleared between iterations.
 func (r *Runner) Run(ctx context.Context) ([]RunResult, error) {
 	if r.Engine == nil {
 		return nil, errors.New("benchmark: Runner.Engine is required")
@@ -78,37 +81,110 @@ func (r *Runner) Run(ctx context.Context) ([]RunResult, error) {
 	}
 
 	var out []RunResult
-	for _, c := range r.Cases {
-		for _, m := range r.Models {
-			for i := 0; i < repeats; i++ {
-				out = append(out, r.runOne(ctx, c, m, i))
-			}
-		}
+	for _, group := range groupByScenario(r.Cases) {
+		out = append(out, r.runScenarioGroup(ctx, group, repeats)...)
 	}
 	return out, nil
 }
 
-func (r *Runner) runOne(ctx context.Context, c *Case, m ModelConfig, iteration int) RunResult {
-	rr := RunResult{Case: c.Name, Model: m.DisplayName(), Iteration: iteration}
+// groupByScenario returns cases bucketed by ScenarioPath, preserving the
+// first-seen order of both groups and members so result ordering stays
+// deterministic and close to the caller's input order.
+func groupByScenario(cases []*Case) [][]*Case {
+	var groups [][]*Case
+	seen := map[string]int{}
+	for _, c := range cases {
+		path := c.ScenarioPath()
+		if idx, ok := seen[path]; ok {
+			groups[idx] = append(groups[idx], c)
+			continue
+		}
+		seen[path] = len(groups)
+		groups = append(groups, []*Case{c})
+	}
+	return groups
+}
 
-	scenario, err := accounting.LoadScenarioFile(c.ScenarioPath())
+// runScenarioGroup seeds the scenario and builds the per-model engine once
+// for every case in the group, then runs each (case, model, iteration)
+// against that shared state. Only journals are cleared between iterations,
+// so chart-of-accounts embeddings and engine setup are paid once per group.
+func (r *Runner) runScenarioGroup(ctx context.Context, group []*Case, repeats int) []RunResult {
+	results := make([]RunResult, 0, len(group)*len(r.Models)*repeats)
+	fanout := func(err error) {
+		for _, c := range group {
+			for _, m := range r.Models {
+				for i := range repeats {
+					results = append(results, RunResult{
+						Case: c.Name, Model: m.DisplayName(), Iteration: i, Error: err.Error(),
+					})
+				}
+			}
+		}
+	}
+
+	scenario, err := accounting.LoadScenarioFile(group[0].ScenarioPath())
 	if err != nil {
-		rr.Error = err.Error()
-		return rr
+		fanout(err)
+		return results
 	}
 
 	opts := []memory.Option{}
 	if r.Embedder != nil {
 		searcher, err := chromem.NewSearcher(r.Embedder)
 		if err != nil {
-			rr.Error = fmt.Errorf("chromem searcher: %w", err).Error()
-			return rr
+			fanout(fmt.Errorf("chromem searcher: %w", err))
+			return results
 		}
 		opts = append(opts, memory.WithSearcher(searcher))
 	}
 	repo := memory.NewAccountingRepository(opts...)
 	if err := scenario.Seed(ctx, repo); err != nil {
-		rr.Error = fmt.Errorf("seed: %w", err).Error()
+		fanout(fmt.Errorf("seed: %w", err))
+		return results
+	}
+
+	engines := make([]llm.ReasoningEngine[bookkeeping.Intent], len(r.Models))
+	engineErrs := make([]error, len(r.Models))
+	for i, m := range r.Models {
+		engine, err := r.Engine(ctx, repo, m)
+		if err != nil {
+			engineErrs[i] = fmt.Errorf("engine: %w", err)
+			continue
+		}
+		engines[i] = engine
+	}
+
+	for _, c := range group {
+		maxTurns := c.Options.MaxTurns
+		if maxTurns <= 0 {
+			maxTurns = r.DefaultMaxTurns
+		}
+		for mi, m := range r.Models {
+			if engineErrs[mi] != nil {
+				for i := range repeats {
+					results = append(results, RunResult{
+						Case: c.Name, Model: m.DisplayName(), Iteration: i, Error: engineErrs[mi].Error(),
+					})
+				}
+				continue
+			}
+			for i := range repeats {
+				results = append(results, r.runIteration(ctx, c, m, i, repo, engines[mi], maxTurns))
+			}
+		}
+	}
+	return results
+}
+
+// runIteration clears the ledger's journal state, wires a fresh bus, and
+// runs the agent once. The bus is per-iteration so its optimistic-concurrency
+// sequence never lags behind a freshly-cleared repo.
+func (r *Runner) runIteration(ctx context.Context, c *Case, m ModelConfig, iteration int, repo *memory.Repository, engine llm.ReasoningEngine[bookkeeping.Intent], maxTurns int) RunResult {
+	rr := RunResult{Case: c.Name, Model: m.DisplayName(), Iteration: iteration}
+
+	if err := repo.ClearJournals(ctx); err != nil {
+		rr.Error = fmt.Errorf("clear journals: %w", err).Error()
 		return rr
 	}
 
@@ -122,16 +198,6 @@ func (r *Runner) runOne(ctx context.Context, c *Case, m ModelConfig, iteration i
 		return rr
 	}
 
-	engine, err := r.Engine(ctx, repo, m)
-	if err != nil {
-		rr.Error = fmt.Errorf("engine: %w", err).Error()
-		return rr
-	}
-
-	maxTurns := c.Options.MaxTurns
-	if maxTurns <= 0 {
-		maxTurns = r.DefaultMaxTurns
-	}
 	a := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,

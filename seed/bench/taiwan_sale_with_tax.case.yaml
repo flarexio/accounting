@@ -1,0 +1,15 @@
+name: taiwan_sale_with_tax
+description: 台北總公司賒銷商品 NT$30,000，含 5% 營業稅 NT$1,500，應收帳款 NT$31,500。
+scenario: ../taiwan_ledger.yaml
+request: "台北總公司賒銷商品給客戶 NT$30,000，含 5% 營業稅 NT$1,500，應收帳款共 NT$31,500。"
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: TWD
+    lines:
+      - { account_code: "1141", side: debit,  amount: 31500, branch_id: hq }
+      - { account_code: "4101", side: credit, amount: 30000, branch_id: hq }
+      - { account_code: "2191", side: credit, amount:  1500, branch_id: hq }
+options:
+  max_turns: 3

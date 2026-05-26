@@ -1,0 +1,15 @@
+name: taiwan_payroll_with_withholdings
+description: 台北總公司五月薪資 NT$80,000，代扣勞健保 NT$5,000，淨額 NT$75,000 待付。
+scenario: ../taiwan_ledger.yaml
+request: "台北總公司計提五月份員工薪資 NT$80,000，代扣勞健保 NT$5,000，員工淨領 NT$75,000。"
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: TWD
+    lines:
+      - { account_code: "6101", side: debit,  amount: 80000, branch_id: hq }
+      - { account_code: "2171", side: credit, amount: 75000, branch_id: hq }
+      - { account_code: "2201", side: credit, amount:  5000, branch_id: hq }
+options:
+  max_turns: 3

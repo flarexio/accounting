@@ -1,0 +1,14 @@
+name: taiwan_rent_taichung
+description: 台中營業所五月份租金 NT$25,000 由銀行存款支付。
+scenario: ../taiwan_ledger.yaml
+request: "台中營業所五月份店租 NT$25,000，已從公司銀行存款轉帳支付給房東。"
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: TWD
+    lines:
+      - { account_code: "6102", side: debit,  amount: 25000, branch_id: tc }
+      - { account_code: "1103", side: credit, amount: 25000, branch_id: tc }
+options:
+  max_turns: 3
