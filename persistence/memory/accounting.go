@@ -135,6 +135,12 @@ func (r *Repository) Branches(_ context.Context) ([]accounting.Branch, error) {
 	for _, b := range r.branches {
 		out = append(out, b)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Position != out[j].Position {
+			return out[i].Position < out[j].Position
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out, nil
 }
 

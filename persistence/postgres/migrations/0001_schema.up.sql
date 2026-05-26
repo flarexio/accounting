@@ -18,8 +18,9 @@ CREATE TABLE accounts (
 );
 
 CREATE TABLE branches (
-    id   TEXT PRIMARY KEY,
-    name TEXT NOT NULL
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE companies (

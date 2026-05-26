@@ -13,11 +13,14 @@ import (
 
 // PromptRenderer builds provider-neutral messages for a bookkeeping turn. It
 // holds chart snapshots so Render is free of repository I/O on the hot path.
+// OperatorBranchID names the branch the operator is currently working from;
+// the prompt asks the model to default to it when the user doesn't specify.
 type PromptRenderer struct {
-	Company  accounting.Company
-	Accounts []accounting.Account
-	Periods  []accounting.Period
-	Branches []accounting.Branch
+	Company          accounting.Company
+	Accounts         []accounting.Account
+	Periods          []accounting.Period
+	Branches         []accounting.Branch
+	OperatorBranchID string
 }
 
 // NewPromptRenderer snapshots the company, chart, periods, and branches from repo.
@@ -94,8 +97,12 @@ func (r PromptRenderer) tenantContext() string {
 	b.WriteString(r.openPeriods())
 
 	if branches := r.branchesText(); branches != "" {
-		b.WriteString("\nReporting branches (optional dimension on each line):\n")
+		b.WriteString("\nReporting branches (every line must carry one as branch_id):\n")
 		b.WriteString(branches)
+	}
+
+	if name := r.operatorBranchName(); name != "" {
+		fmt.Fprintf(&b, "\nOperator is working from branch %q (id: %s); default branch_id to this on new lines unless the user clearly specifies another.\n", name, r.OperatorBranchID)
 	}
 
 	b.WriteString("\nWhen choosing values for post_journal:\n")
@@ -188,6 +195,18 @@ func (r PromptRenderer) openPeriods() string {
 	return b.String()
 }
 
+func (r PromptRenderer) operatorBranchName() string {
+	if r.OperatorBranchID == "" {
+		return ""
+	}
+	for _, b := range r.Branches {
+		if b.ID == r.OperatorBranchID {
+			return b.Name
+		}
+	}
+	return ""
+}
+
 func (r PromptRenderer) branchesText() string {
 	sorted := append([]accounting.Branch(nil), r.Branches...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
@@ -227,6 +246,7 @@ Format rules for post_journal payloads:
       three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.
   - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.
   - date is the business date in the company's timezone, formatted YYYY-MM-DD (e.g. 2026-05-12), and must fall inside the chosen period.
+  - every line must carry a branch_id from the reporting branches list; all lines on one entry must share the same branch_id.
   - use one currency throughout.
 `
 

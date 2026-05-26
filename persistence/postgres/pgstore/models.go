@@ -16,8 +16,9 @@ type Account struct {
 }
 
 type Branch struct {
-	ID   string
-	Name string
+	ID       string
+	Name     string
+	Position int32
 }
 
 type Company struct {

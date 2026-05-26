@@ -17,20 +17,21 @@ SET name = EXCLUDED.name,
     active = EXCLUDED.active;
 
 -- name: GetBranch :one
-SELECT id, name
+SELECT id, name, position
 FROM branches
 WHERE id = $1;
 
 -- name: ListBranches :many
-SELECT id, name
+SELECT id, name, position
 FROM branches
-ORDER BY id;
+ORDER BY position, id;
 
 -- name: UpsertBranch :exec
-INSERT INTO branches (id, name)
-VALUES ($1, $2)
+INSERT INTO branches (id, name, position)
+VALUES ($1, $2, $3)
 ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name;
+SET name = EXCLUDED.name,
+    position = EXCLUDED.position;
 
 -- name: GetPeriod :one
 SELECT id, start_on, end_on, status
