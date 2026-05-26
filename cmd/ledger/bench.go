@@ -29,8 +29,10 @@ func newBenchCommand(stdout io.Writer) *cli.Command {
 			"builds a fresh in-memory ledger (with a chromem-go account searcher\n" +
 			"when an embedding API key is available), runs the agent once per\n" +
 			"--repeats, and grades the proposed intent against the case's gold\n" +
-			"answer. The reasoning engine reads config.yaml llm.api_key and\n" +
-			"llm.base_url; --model overrides the model name per run.",
+			"answer. The reasoning engine reads config.yaml llm.kind,\n" +
+			"llm.api_key, llm.base_url, and llm.max_tokens; --model overrides\n" +
+			"the model name per run. All --model values share the configured\n" +
+			"provider, so cross-provider comparisons need separate runs.",
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
 				Name:     "suite",
@@ -39,7 +41,7 @@ func newBenchCommand(stdout io.Writer) *cli.Command {
 			},
 			&cli.StringSliceFlag{
 				Name:     "model",
-				Usage:    "openai model name; repeat the flag or use commas to compare several",
+				Usage:    "model name for the provider set by config.yaml llm.kind; repeat the flag or use commas to compare several",
 				Required: true,
 			},
 			&cli.IntFlag{
