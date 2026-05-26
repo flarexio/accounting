@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/persistence/memory"
@@ -26,7 +25,7 @@ func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 
 func balancedAWSIntent() accounting.JournalIntent {
 	return accounting.JournalIntent{
-		Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 12),
 		PeriodID:    "2026-05",
 		Currency:    "USD",
 		Description: "Paid AWS bill on company credit card",
@@ -100,7 +99,7 @@ func TestValidator_RejectsUnknownPeriod(t *testing.T) {
 func TestValidator_RejectsZeroDate(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
-	intent.Date = time.Time{}
+	intent.Date = accounting.Date{}
 	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
 	if err == nil || !strings.Contains(err.Error(), "date is required") {
 		t.Fatalf("expected zero-date error, got %v", err)
@@ -110,7 +109,7 @@ func TestValidator_RejectsZeroDate(t *testing.T) {
 func TestValidator_RejectsDateBeforePeriod(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
-	intent.Date = time.Date(2026, 4, 30, 23, 0, 0, 0, time.UTC)
+	intent.Date = accounting.NewDate(2026, 4, 30)
 	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
 	if err == nil || !strings.Contains(err.Error(), "before period") {
 		t.Fatalf("expected date-before-period error, got %v", err)
@@ -120,7 +119,7 @@ func TestValidator_RejectsDateBeforePeriod(t *testing.T) {
 func TestValidator_RejectsDateAfterPeriod(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
-	intent.Date = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	intent.Date = accounting.NewDate(2026, 6, 1)
 	err := accounting.Validator{Repo: repo}.Validate(context.Background(), intent)
 	if err == nil || !strings.Contains(err.Error(), "after period") {
 		t.Fatalf("expected date-after-period error, got %v", err)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -27,7 +26,7 @@ func postJournalEventContent(t *testing.T, intent accounting.JournalIntent) stri
 
 func sampleIntent() accounting.JournalIntent {
 	return accounting.JournalIntent{
-		Date:        time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 10),
 		PeriodID:    "2026-05",
 		Currency:    "TWD",
 		Description: "現金銷售",
@@ -195,7 +194,7 @@ func reverseJournalEventContent(t *testing.T, entryID, reason string) string {
 func TestRenderReversePreviewFlipsSides(t *testing.T) {
 	orig := accounting.JournalEntry{
 		ID:          "JE-0001",
-		Date:        time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 10),
 		PeriodID:    "2026-05",
 		Currency:    "TWD",
 		Description: "現金銷售",
@@ -225,7 +224,7 @@ func TestRenderReversePreviewFlipsSides(t *testing.T) {
 
 func TestRenderJournalPreviewSortsDebitsBeforeCredits(t *testing.T) {
 	intent := accounting.JournalIntent{
-		Date:     time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		Date:     accounting.NewDate(2026, 5, 10),
 		PeriodID: "2026-05",
 		Currency: "TWD",
 		Lines: []accounting.JournalLine{
@@ -246,7 +245,7 @@ func TestRenderJournalPreviewSortsDebitsBeforeCredits(t *testing.T) {
 func TestModelAppendsPreviewForReverseJournal(t *testing.T) {
 	orig := accounting.JournalEntry{
 		ID:          "JE-0001",
-		Date:        time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 10),
 		PeriodID:    "2026-05",
 		Currency:    "TWD",
 		Description: "現金銷售",

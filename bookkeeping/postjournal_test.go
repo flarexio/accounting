@@ -21,8 +21,8 @@ func ledgerScenario() accounting.Scenario {
 		Periods: []accounting.Period{
 			{
 				ID:     "2026-05",
-				Start:  time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
-				End:    time.Date(2026, 5, 31, 23, 59, 59, 0, time.UTC),
+				Start:  accounting.NewDate(2026, 5, 1),
+				End:    accounting.NewDate(2026, 5, 31),
 				Status: accounting.PeriodOpen,
 			},
 		},
@@ -48,7 +48,7 @@ func seededLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventB
 
 func balancedIntent() accounting.JournalIntent {
 	return accounting.JournalIntent{
-		Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),
+		Date:        accounting.NewDate(2026, 5, 12),
 		PeriodID:    "2026-05",
 		Currency:    "USD",
 		Description: "Paid cloud bill on company credit card",

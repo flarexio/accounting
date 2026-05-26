@@ -2,7 +2,7 @@ version: "2"
 sql:
   - engine: postgresql
     queries: sqlc/queries.sql
-    schema: migrations/0001_journal_schema.up.sql
+    schema: migrations/0001_schema.up.sql
     gen:
       go:
         package: pgstore

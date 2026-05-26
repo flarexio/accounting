@@ -38,8 +38,21 @@ const (
 
 // Company is the legal entity that owns the ledger.
 type Company struct {
-	ID   string `json:"id" yaml:"id"`
-	Name string `json:"name" yaml:"name"`
+	ID       string `json:"id" yaml:"id"`
+	Name     string `json:"name" yaml:"name"`
+	TimeZone string `json:"timezone" yaml:"timezone"`
+}
+
+// Location parses the IANA name in TimeZone; returns time.UTC if empty or invalid.
+func (c Company) Location() *time.Location {
+	if c.TimeZone == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(c.TimeZone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }
 
 // Account is one row in the chart of accounts. Inactive accounts cannot be
@@ -58,10 +71,11 @@ type Branch struct {
 }
 
 // Period is an accounting period. Closed periods cannot accept postings.
+// Start and End are calendar dates in the company's timezone; End is inclusive.
 type Period struct {
 	ID     string       `json:"id" yaml:"id"`
-	Start  time.Time    `json:"start" yaml:"start"`
-	End    time.Time    `json:"end" yaml:"end"`
+	Start  Date         `json:"start" yaml:"start"`
+	End    Date         `json:"end" yaml:"end"`
 	Status PeriodStatus `json:"status" yaml:"status"`
 }
 
@@ -81,9 +95,10 @@ type JournalLine struct {
 	Dimensions  Dimensions `json:"dimensions"`
 }
 
-// JournalIntent is a proposed transaction; it must clear Validator before posting.
+// JournalIntent is a proposed transaction; it must clear Validator before
+// posting. Date is the business date in the company's timezone.
 type JournalIntent struct {
-	Date        time.Time     `json:"date"`
+	Date        Date          `json:"date"`
 	PeriodID    string        `json:"period_id"`
 	Currency    string        `json:"currency"`
 	Description string        `json:"description"`
@@ -91,10 +106,11 @@ type JournalIntent struct {
 }
 
 // JournalEntry is a posted, sealed accounting entry. Entries are immutable;
-// corrections go through new reversing entries.
+// corrections go through new reversing entries. PostedAt is the UTC instant
+// the entry was written; Date is the business date it belongs to.
 type JournalEntry struct {
 	ID          string        `json:"id"`
-	Date        time.Time     `json:"date"`
+	Date        Date          `json:"date"`
 	PeriodID    string        `json:"period_id"`
 	Currency    string        `json:"currency"`
 	Description string        `json:"description"`

@@ -20,11 +20,17 @@ type Branch struct {
 	Name string
 }
 
+type Company struct {
+	ID       string
+	Name     string
+	Timezone string
+}
+
 type JournalEntry struct {
 	ID          string
 	Sequence    int64
 	Subject     string
-	EntryDate   pgtype.Timestamptz
+	EntryDate   pgtype.Date
 	PeriodID    string
 	Currency    string
 	Description string
@@ -44,8 +50,8 @@ type JournalLine struct {
 
 type Period struct {
 	ID      string
-	StartAt pgtype.Timestamptz
-	EndAt   pgtype.Timestamptz
+	StartOn pgtype.Date
+	EndOn   pgtype.Date
 	Status  string
 }
 

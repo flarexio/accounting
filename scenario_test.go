@@ -3,7 +3,6 @@ package accounting_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/flarexio/accounting"
 )
@@ -12,13 +11,14 @@ const sampleSeedYAML = `name: sample
 company:
   id: acme
   name: Acme Co.
+  timezone: Asia/Taipei
 accounts:
   - { code: "1000", name: Cash, type: asset, active: true }
   - { code: "4000", name: Sales, type: revenue, active: false }
 branches:
   - { id: hq, name: Headquarters }
 periods:
-  - { id: "2026-05", start: 2026-05-01T00:00:00Z, end: 2026-05-31T23:59:59Z, status: open }
+  - { id: "2026-05", start: "2026-05-01", end: "2026-05-31", status: open }
 `
 
 func TestDecodeScenarioYAML(t *testing.T) {
@@ -41,9 +41,12 @@ func TestDecodeScenarioYAML(t *testing.T) {
 	if len(s.Periods) != 1 {
 		t.Fatalf("periods: got %d, want 1", len(s.Periods))
 	}
-	wantStart := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	wantStart := accounting.NewDate(2026, 5, 1)
 	if !s.Periods[0].Start.Equal(wantStart) {
 		t.Errorf("period start: got %v, want %v", s.Periods[0].Start, wantStart)
+	}
+	if s.Company.TimeZone != "Asia/Taipei" {
+		t.Errorf("company timezone: got %q, want Asia/Taipei", s.Company.TimeZone)
 	}
 	if s.Periods[0].Status != accounting.PeriodOpen {
 		t.Errorf("period status: got %q, want open", s.Periods[0].Status)
