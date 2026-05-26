@@ -122,7 +122,7 @@ const intentSchemaJSON = `{
                     "additionalProperties": false,
                     "required": ["branch_id"],
                     "properties": {
-                      "branch_id": { "type": "string", "description": "Empty string when no branch dimension applies." }
+                      "branch_id": { "type": "string", "description": "Required reporting branch this line is posted to; must come from the periods/branches list. All lines on one entry share the same branch_id." }
                     }
                   }
                 }

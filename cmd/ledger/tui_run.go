@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/accounting"
+	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/cmd/ledger/tui"
 	"github.com/flarexio/accounting/config"
 	"github.com/flarexio/stoa/harness/loop"
@@ -60,7 +59,40 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 		comp.llmCfg.Model = model
 	}
 
-	return tui.Run(ctx, []tui.Option{comp.bookOption()})
+	repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+	defer repoCloser.Close()
+
+	bus, err := buildMessaging(ctx, comp.cfg.Messaging, repo)
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+	defer bus.Close()
+
+	period, err := firstOpenPeriod(ctx, repo)
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+	if period.ID == "" {
+		return fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
+	}
+
+	branches, err := repo.Branches(ctx)
+	if err != nil {
+		return fmt.Errorf("tui: load branches: %w", err)
+	}
+	if len(branches) == 0 {
+		return fmt.Errorf("tui: ledger has no branches; run `ledger seed` first")
+	}
+
+	options := make([]tui.Option, len(branches))
+	for i, br := range branches {
+		options[i] = comp.bookOption(repo, bus, br)
+	}
+
+	return tui.Run(ctx, options)
 }
 
 // tuiComposer builds the bookkeeper session from config and CLI flags.
@@ -70,36 +102,16 @@ type tuiComposer struct {
 	maxTurns int
 }
 
-// bookOption is the bookkeeper session; the TUI never seeds, it connects to a
-// ledger already seeded by `ledger seed` and reads the company from the repo.
-func (comp tuiComposer) bookOption() tui.Option {
+// bookOption is one branch-scoped bookkeeper session. The repo and bus live
+// for the lifetime of the TUI process (closed in runTUI), so Start only
+// builds the per-session engine.
+func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkeeping.EventBus, branch accounting.Branch) tui.Option {
 	return tui.Option{
-		Label: "bookkeeper",
+		Label: branch.Name,
+		Hint:  branch.ID,
 		Start: func(ctx context.Context) (tui.Session, error) {
-			repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
+			engine, err := buildBookEngine(ctx, repo, comp.llmCfg, branch.ID)
 			if err != nil {
-				return nil, err
-			}
-			bus, err := buildMessaging(ctx, comp.cfg.Messaging, repo)
-			if err != nil {
-				repoCloser.Close()
-				return nil, err
-			}
-			period, err := firstOpenPeriod(ctx, repo)
-			if err != nil {
-				bus.Close()
-				repoCloser.Close()
-				return nil, err
-			}
-			if period.ID == "" {
-				bus.Close()
-				repoCloser.Close()
-				return nil, fmt.Errorf("tui: ledger has no open period; run `ledger seed` first")
-			}
-			engine, err := buildBookEngine(ctx, repo, comp.llmCfg)
-			if err != nil {
-				bus.Close()
-				repoCloser.Close()
 				return nil, err
 			}
 			return &bookSession{
@@ -109,17 +121,15 @@ func (comp tuiComposer) bookOption() tui.Option {
 					Publisher: bus,
 					MaxTurns:  comp.maxTurns,
 				},
-				repo:    repo,
-				closers: []io.Closer{bus, repoCloser},
+				repo: repo,
 			}, nil
 		},
 	}
 }
 
 type bookSession struct {
-	agent   bookkeeper.Bookkeeper
-	repo    accounting.LedgerRepository
-	closers []io.Closer
+	agent bookkeeper.Bookkeeper
+	repo  accounting.LedgerRepository
 }
 
 func (s *bookSession) LookupEntry(ctx context.Context, entryID string) (accounting.JournalEntry, bool, error) {
@@ -141,12 +151,4 @@ func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSi
 	return out, err
 }
 
-func (s *bookSession) Close() error {
-	var errs []error
-	for _, c := range s.closers {
-		if err := c.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
-}
+func (s *bookSession) Close() error { return nil }

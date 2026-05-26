@@ -23,10 +23,13 @@ const sampleSeed = `name: t
 company:
   id: acme
   name: Acme Co.
+  timezone: UTC
 accounts:
   - { code: "1000", name: Cash, type: asset, active: true }
+branches:
+  - { id: main, name: Main }
 periods:
-  - { id: "2026-05", start: 2026-05-01T00:00:00Z, end: 2026-05-31T23:59:59Z, status: open }
+  - { id: "2026-05", start: "2026-05-01", end: "2026-05-31", status: open }
 `
 
 func writeSeedFile(t *testing.T, dir, name, body string) string {

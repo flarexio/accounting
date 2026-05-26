@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -73,8 +74,19 @@ func DecodeScenarioYAML(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
+// Validate returns the first invariant the scenario breaks, or nil if it can seed.
+func (s Scenario) Validate() error {
+	if len(s.Branches) == 0 {
+		return errors.New("accounting: scenario needs at least one branch; single-location companies use {id: main, name: ...}")
+	}
+	return nil
+}
+
 // Seed upserts the scenario's company, chart, branches, and periods into repo. An empty Company is skipped.
 func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
 	if s.Company.ID != "" {
 		if err := repo.SetCompany(ctx, s.Company); err != nil {
 			return fmt.Errorf("accounting: seed company %q: %w", s.Company.ID, err)
@@ -85,7 +97,10 @@ func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
 			return fmt.Errorf("accounting: seed account %q: %w", a.Code, err)
 		}
 	}
-	for _, b := range s.Branches {
+	for i, b := range s.Branches {
+		if b.Position == 0 {
+			b.Position = i + 1
+		}
 		if err := repo.PutBranch(ctx, b); err != nil {
 			return fmt.Errorf("accounting: seed branch %q: %w", b.ID, err)
 		}

@@ -54,6 +54,8 @@ To keep knowing and doing unified, every agent follows this cycle:
 - **Validation and feedback are mandatory.** Never rely on prompt instructions to enforce accounting invariants; domain errors flow back into the next reasoning cycle as typed events.
 - **Ledger is the CLI name, accounting is the bounded context.** Keep the Go module as `github.com/flarexio/accounting`; keep the runnable command under `cmd/ledger`.
 - **Event-sourced projection.** Bookkeeping use cases publish events; a single subscribed `Apply` handler is the only writer to the `LedgerRepository` projection.
+- **Business dates are dates, not instants.** `JournalEntry.Date`, `JournalIntent.Date`, and `Period.Start/End` are `accounting.Date` (year/month/day) over Postgres `DATE`, interpreted in the company's timezone via `Company.TimeZone` (IANA name like `Asia/Taipei`). The agent prompt names the timezone so the LLM knows what zone its `YYYY-MM-DD` outputs live in. `JournalEntry.PostedAt` stays `time.Time` / `TIMESTAMPTZ` — it is a real instant. Never derive a business date from a `TIMESTAMPTZ` without an explicit location.
+- **Every line carries a branch_id.** Branches are not an optional reporting tag; every journal line must reference a branch and all lines on one entry share the same branch_id. Single-location companies seed one branch (convention: `{id: main, name: ...}`). The TUI picks the operator's current branch at startup and the prompt's `OperatorBranchID` tells the LLM to default to it when the user doesn't specify; the validator still enforces the invariant regardless of where the value came from.
 
 ## Code Style
 

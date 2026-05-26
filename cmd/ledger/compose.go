@@ -107,12 +107,14 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 	return accounting.Period{}, nil
 }
 
-// buildBookEngine wires the OpenAI bookkeeper reasoning engine.
-func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+// buildBookEngine wires the OpenAI bookkeeper reasoning engine. operatorBranchID
+// is injected into the prompt; pass "" to omit the operator-branch hint.
+func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM, operatorBranchID string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
 		return nil, fmt.Errorf("book-run: openai engine: %w", err)
 	}
+	renderer.OperatorBranchID = operatorBranchID
 	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 		APIKey:                       llmCfg.APIKey,
 		BaseURL:                      llmCfg.BaseURL,

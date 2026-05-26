@@ -148,7 +148,7 @@ func benchEngineFactory() benchmark.EngineFactory {
 			APIKey:                       m.APIKey,
 			BaseURL:                      m.BaseURL,
 			DisableStrictSchemaWithTools: m.DisableStrictSchemaWithTools,
-		})
+		}, "")
 	}
 }
 

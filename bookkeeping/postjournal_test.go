@@ -18,6 +18,7 @@ func ledgerScenario() accounting.Scenario {
 			{Code: "5200", Name: "Cloud Infrastructure", Type: accounting.AccountExpense, Active: true},
 			{Code: "2100", Name: "Credit Card Payable", Type: accounting.AccountLiability, Active: true},
 		},
+		Branches: []accounting.Branch{{ID: "main", Name: "Main"}},
 		Periods: []accounting.Period{
 			{
 				ID:     "2026-05",
@@ -53,8 +54,8 @@ func balancedIntent() accounting.JournalIntent {
 		Currency:    "USD",
 		Description: "Paid cloud bill on company credit card",
 		Lines: []accounting.JournalLine{
-			{AccountCode: "5200", Side: accounting.SideDebit, Amount: 10000},
-			{AccountCode: "2100", Side: accounting.SideCredit, Amount: 10000},
+			{AccountCode: "5200", Side: accounting.SideDebit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "main"}},
+			{AccountCode: "2100", Side: accounting.SideCredit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "main"}},
 		},
 	}
 }

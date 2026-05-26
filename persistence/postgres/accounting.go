@@ -305,8 +305,9 @@ func (r *accountingRepository) PutPeriod(ctx context.Context, p accounting.Perio
 
 func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branch) error {
 	if err := r.q.UpsertBranch(ctx, pgstore.UpsertBranchParams{
-		ID:   b.ID,
-		Name: b.Name,
+		ID:       b.ID,
+		Name:     b.Name,
+		Position: int32(b.Position),
 	}); err != nil {
 		return fmt.Errorf("postgres: UpsertBranch: %w", err)
 	}
@@ -397,7 +398,7 @@ func accountFromRow(row pgstore.Account) accounting.Account {
 }
 
 func branchFromRow(row pgstore.Branch) accounting.Branch {
-	return accounting.Branch{ID: row.ID, Name: row.Name}
+	return accounting.Branch{ID: row.ID, Name: row.Name, Position: int(row.Position)}
 }
 
 func periodFromRow(row pgstore.Period) accounting.Period {
