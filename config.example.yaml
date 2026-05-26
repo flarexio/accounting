@@ -22,7 +22,7 @@ messaging:
 
 llm:
   # OpenAI-compatible reasoning engine. --model overrides model.
-  model: gpt-5.4-mini
+  model: gpt-5.5
   # api_key may be omitted to use OPENAI_API_KEY from the environment.
   api_key: ${OPENAI_API_KEY}
   # base_url may be omitted for default OpenAI; set for OpenAI-compatible providers.

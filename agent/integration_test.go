@@ -33,7 +33,7 @@ func TestAgent_OpenAI(t *testing.T) {
 
 	engine, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 		APIKey:       apiKey,
-		Model:        "gpt-5.4-mini",
+		Model:        "gpt-5.5",
 		IntentSchema: bookkeeping.IntentSchema(),
 		Renderer:     renderer,
 	})

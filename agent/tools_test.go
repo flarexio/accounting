@@ -93,11 +93,11 @@ func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(msgs[1].Content, "find_accounts") {
-		t.Error("a small chart should be dumped, not put behind the tool")
+	if !strings.Contains(msgs[0].Content, "Active chart of accounts") {
+		t.Error("a small chart should list the accounts in the system prompt")
 	}
-	if !strings.Contains(msgs[1].Content, "Active chart of accounts") {
-		t.Error("a small chart should list the accounts in the prompt")
+	if !strings.Contains(msgs[0].Content, "Account 1 ") {
+		t.Error("a small chart should enumerate accounts in the system prompt")
 	}
 
 	large := agent.PromptRenderer{Accounts: mk(20)}
@@ -105,10 +105,10 @@ func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(msgs[1].Content, "find_accounts") {
-		t.Error("a large chart should be reachable through the find_accounts tool")
+	if !strings.Contains(msgs[0].Content, "not listed -- use find_accounts") {
+		t.Error("a large chart should be summarized and direct the model to find_accounts")
 	}
-	if strings.Contains(msgs[1].Content, "Account 17") {
+	if strings.Contains(msgs[0].Content, "Account 17") {
 		t.Error("a large chart must not be dumped account-by-account")
 	}
 }

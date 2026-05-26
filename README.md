@@ -96,7 +96,7 @@ The bookkeeper drives an OpenAI-compatible API. Configure `llm` in `config.yaml`
 
 ```yaml
 llm:
-  model: gpt-5.4-mini
+  model: gpt-5.5
   api_key: ${OPENAI_API_KEY}  # or set OPENAI_API_KEY in the environment
   base_url: https://api.openai.com/v1  # omit for default; set for compatible providers
 ```
