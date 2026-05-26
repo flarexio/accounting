@@ -33,21 +33,21 @@ ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name;
 
 -- name: GetPeriod :one
-SELECT id, start_at, end_at, status
+SELECT id, start_on, end_on, status
 FROM periods
 WHERE id = $1;
 
 -- name: ListPeriods :many
-SELECT id, start_at, end_at, status
+SELECT id, start_on, end_on, status
 FROM periods
 ORDER BY id;
 
 -- name: UpsertPeriod :exec
-INSERT INTO periods (id, start_at, end_at, status)
+INSERT INTO periods (id, start_on, end_on, status)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE
-SET start_at = EXCLUDED.start_at,
-    end_at = EXCLUDED.end_at,
+SET start_on = EXCLUDED.start_on,
+    end_on = EXCLUDED.end_on,
     status = EXCLUDED.status;
 
 -- name: GetEntry :one

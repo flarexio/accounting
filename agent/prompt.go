@@ -78,6 +78,9 @@ func (r PromptRenderer) tenantContext() string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Company: %s\n", r.Company.Name)
+	if tz := r.Company.TimeZone; tz != "" {
+		fmt.Fprintf(&b, "Timezone: %s (all dates are business dates in this zone)\n", tz)
+	}
 
 	if toolMode {
 		b.WriteString("\n")
@@ -180,7 +183,7 @@ func (r PromptRenderer) openPeriods() string {
 		if p.Status != accounting.PeriodOpen {
 			continue
 		}
-		fmt.Fprintf(&b, "  - %s [%s .. %s]\n", p.ID, p.Start.Format("2006-01-02"), p.End.Format("2006-01-02"))
+		fmt.Fprintf(&b, "  - %s [%s .. %s]\n", p.ID, p.Start, p.End)
 	}
 	return b.String()
 }
@@ -223,7 +226,7 @@ Format rules for post_journal payloads:
       two-decimal currencies (USD, EUR, GBP, ...): cents, e.g. $100 = 10000.
       three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.
   - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.
-  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.
+  - date is the business date in the company's timezone, formatted YYYY-MM-DD (e.g. 2026-05-12), and must fall inside the chosen period.
   - use one currency throughout.
 `
 

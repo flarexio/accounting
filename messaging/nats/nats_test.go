@@ -15,7 +15,7 @@ import (
 func sampleEvent() accounting.JournalPosted {
 	return accounting.JournalPosted{
 		Entry: accounting.JournalEntry{
-			Date:        time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC),
+			Date:        accounting.NewDate(2026, 5, 12),
 			PeriodID:    "2026-05",
 			Currency:    "USD",
 			Description: "Paid AWS bill",

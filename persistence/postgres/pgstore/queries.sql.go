@@ -76,7 +76,7 @@ func (q *Queries) GetLastSequence(ctx context.Context, subject string) (int64, e
 }
 
 const getPeriod = `-- name: GetPeriod :one
-SELECT id, start_at, end_at, status
+SELECT id, start_on, end_on, status
 FROM periods
 WHERE id = $1
 `
@@ -86,8 +86,8 @@ func (q *Queries) GetPeriod(ctx context.Context, id string) (Period, error) {
 	var i Period
 	err := row.Scan(
 		&i.ID,
-		&i.StartAt,
-		&i.EndAt,
+		&i.StartOn,
+		&i.EndOn,
 		&i.Status,
 	)
 	return i, err
@@ -104,7 +104,7 @@ type InsertEntryParams struct {
 	ID          string
 	Sequence    int64
 	Subject     string
-	EntryDate   pgtype.Timestamptz
+	EntryDate   pgtype.Date
 	PeriodID    string
 	Currency    string
 	Description string
@@ -327,7 +327,7 @@ func (q *Queries) ListLinesForEntries(ctx context.Context, dollar_1 []string) ([
 }
 
 const listPeriods = `-- name: ListPeriods :many
-SELECT id, start_at, end_at, status
+SELECT id, start_on, end_on, status
 FROM periods
 ORDER BY id
 `
@@ -343,8 +343,8 @@ func (q *Queries) ListPeriods(ctx context.Context) ([]Period, error) {
 		var i Period
 		if err := rows.Scan(
 			&i.ID,
-			&i.StartAt,
-			&i.EndAt,
+			&i.StartOn,
+			&i.EndOn,
 			&i.Status,
 		); err != nil {
 			return nil, err
@@ -418,26 +418,26 @@ func (q *Queries) UpsertLastSequence(ctx context.Context, arg UpsertLastSequence
 }
 
 const upsertPeriod = `-- name: UpsertPeriod :exec
-INSERT INTO periods (id, start_at, end_at, status)
+INSERT INTO periods (id, start_on, end_on, status)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE
-SET start_at = EXCLUDED.start_at,
-    end_at = EXCLUDED.end_at,
+SET start_on = EXCLUDED.start_on,
+    end_on = EXCLUDED.end_on,
     status = EXCLUDED.status
 `
 
 type UpsertPeriodParams struct {
 	ID      string
-	StartAt pgtype.Timestamptz
-	EndAt   pgtype.Timestamptz
+	StartOn pgtype.Date
+	EndOn   pgtype.Date
 	Status  string
 }
 
 func (q *Queries) UpsertPeriod(ctx context.Context, arg UpsertPeriodParams) error {
 	_, err := q.db.Exec(ctx, upsertPeriod,
 		arg.ID,
-		arg.StartAt,
-		arg.EndAt,
+		arg.StartOn,
+		arg.EndOn,
 		arg.Status,
 	)
 	return err

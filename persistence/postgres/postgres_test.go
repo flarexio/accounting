@@ -32,23 +32,23 @@ func TestAccountFromRow(t *testing.T) {
 	}
 }
 
-func TestPeriodFromRow_PreservesTimestamps(t *testing.T) {
+func TestPeriodFromRow_PreservesDates(t *testing.T) {
 	start := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)
 	got := periodFromRow(pgstore.Period{
 		ID:      "2026-05",
-		StartAt: pgtype.Timestamptz{Time: start, Valid: true},
-		EndAt:   pgtype.Timestamptz{Time: end, Valid: true},
+		StartOn: pgtype.Date{Time: start, Valid: true},
+		EndOn:   pgtype.Date{Time: end, Valid: true},
 		Status:  "open",
 	})
 	want := accounting.Period{
 		ID:     "2026-05",
-		Start:  start,
-		End:    end,
+		Start:  accounting.NewDate(2026, 5, 1),
+		End:    accounting.NewDate(2026, 5, 31),
 		Status: accounting.PeriodOpen,
 	}
 	if !got.Start.Equal(want.Start) || !got.End.Equal(want.End) {
-		t.Errorf("period timestamps mismatch:\nwant %+v\n got %+v", want, got)
+		t.Errorf("period dates mismatch:\nwant %+v\n got %+v", want, got)
 	}
 	if got.ID != want.ID || got.Status != want.Status {
 		t.Errorf("period scalar mismatch:\nwant %+v\n got %+v", want, got)
