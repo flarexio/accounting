@@ -54,8 +54,8 @@ func NewPromptRenderer(ctx context.Context, repo accounting.LedgerRepository) (P
 
 func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) {
 	messages := []llm.Message{
-		{Role: llm.MessageRoleSystem, Content: bookkeeperSystemPrompt},
-		{Role: llm.MessageRoleUser, Content: r.buildUserPrompt(input)},
+		{Role: llm.MessageRoleSystem, Content: r.systemPrompt()},
+		{Role: llm.MessageRoleUser, Content: taskMessage(input)},
 	}
 
 	for _, event := range input.Events {
@@ -73,18 +73,11 @@ func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) 
 // Above this active-account count the chart is summarized and the model uses find_accounts.
 const accountDumpThreshold = 12
 
-func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
+func (r PromptRenderer) tenantContext() string {
 	toolMode := r.activeAccountCount() > accountDumpThreshold
 
 	var b strings.Builder
-	b.WriteString("Bookkeeping request:\n")
-	b.WriteString(strings.TrimSpace(input.Task))
-	if instr := strings.TrimSpace(input.Instructions); instr != "" {
-		b.WriteString("\n\nFeature instructions:\n")
-		b.WriteString(instr)
-	}
-
-	fmt.Fprintf(&b, "\n\nCompany: %s\n", r.Company.Name)
+	fmt.Fprintf(&b, "Company: %s\n", r.Company.Name)
 
 	if toolMode {
 		b.WriteString("\n")
@@ -102,23 +95,23 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 		b.WriteString(branches)
 	}
 
-	b.WriteString("\nNotes for post_journal:\n")
-	b.WriteString("  - amount is an integer in minor currency units per the ISO 4217 exponent.\n")
-	b.WriteString("      no-fraction currencies (TWD, JPY, KRW, ...): whole units, e.g. NT$100 = 100.\n")
-	b.WriteString("      two-decimal currencies (USD, EUR, GBP, ...): cents, e.g. $100 = 10000.\n")
-	b.WriteString("      three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.\n")
-	b.WriteString("  - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.\n")
-	b.WriteString("  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.\n")
-	if toolMode {
-		b.WriteString("  - the chart of accounts is not listed; call find_accounts to look up the account_code values you need.\n")
-	} else {
+	b.WriteString("\nWhen choosing values for post_journal:\n")
+	if !toolMode {
 		b.WriteString("  - pick account_code only from the active chart of accounts above.\n")
 	}
 	b.WriteString("  - pick period_id only from the open periods above.\n")
 
-	b.WriteString("\nAvailable intents -- choose exactly one:\n")
-	b.WriteString(intentsText())
+	return b.String()
+}
 
+func taskMessage(input llm.ReasoningInput) string {
+	var b strings.Builder
+	b.WriteString("Bookkeeping request:\n")
+	b.WriteString(strings.TrimSpace(input.Task))
+	if instr := strings.TrimSpace(input.Instructions); instr != "" {
+		b.WriteString("\n\nFeature instructions:\n")
+		b.WriteString(instr)
+	}
 	return b.String()
 }
 
@@ -203,12 +196,40 @@ func (r PromptRenderer) branchesText() string {
 	return b.String()
 }
 
-const bookkeeperSystemPrompt = `You are a bookkeeping reasoning engine in a validated agent harness.
-Each turn you choose ONE intent and return it as a typed intent:
-- post_journal: post a new journal entry. Include at least two lines; total debit must equal total credit; use only active account codes; reference an open period_id and a date inside it; use one currency throughout.
-- reverse_journal: reverse an existing posted entry. Supply the entry's JE-id and a short reason; the mirror-image entry is built and validated for you.
-- reject: decline a request that cannot be fulfilled; provide a reason.
-Rules you must follow:
-- If validation feedback is present, fix only the named problems and resubmit.
-- If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
-- When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
+// systemPrompt assembles everything that is stable for this renderer's
+// lifetime: agent role, intent catalog from the registry, payload format
+// rules, behavior rules, and the tenant snapshot. The user message only
+// carries the per-call task and any optional Instructions.
+func (r PromptRenderer) systemPrompt() string {
+	var b strings.Builder
+	b.WriteString(systemPromptHeader)
+	b.WriteString("\n\nAvailable intents:\n")
+	b.WriteString(intentsText())
+	b.WriteString(systemPromptFormatRules)
+	b.WriteString(systemPromptBehaviorRules)
+	b.WriteString("\n\n")
+	b.WriteString(r.tenantContext())
+	return b.String()
+}
+
+const (
+	systemPromptHeader = `You are a bookkeeping reasoning engine in a validated agent harness.
+Each turn, choose exactly one intent from the catalog below and return it as a typed intent.`
+
+	systemPromptFormatRules = `
+Format rules for post_journal payloads:
+  - amount is an integer in minor currency units per the ISO 4217 exponent.
+      no-fraction currencies (TWD, JPY, KRW, ...): whole units, e.g. NT$100 = 100.
+      two-decimal currencies (USD, EUR, GBP, ...): cents, e.g. $100 = 10000.
+      three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.
+  - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.
+  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.
+  - use one currency throughout.
+`
+
+	systemPromptBehaviorRules = `
+Behavior rules:
+  - If validation feedback is present, fix only the named problems and resubmit.
+  - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
+  - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
+)

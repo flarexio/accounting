@@ -23,29 +23,29 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 	if len(messages) != 2 {
-		t.Fatalf("expected exactly system + user with no events, got %d messages", len(messages))
+		t.Fatalf("expected system + task with no events, got %d messages", len(messages))
 	}
 	if messages[0].Role != llm.MessageRoleSystem {
 		t.Errorf("first message should be system, got %q", messages[0].Role)
 	}
-	if !strings.Contains(messages[0].Content, "bookkeeping reasoning engine") {
-		t.Errorf("system prompt missing identity line, got %q", messages[0].Content)
+	if messages[1].Role != llm.MessageRoleUser {
+		t.Errorf("task message should be user role, got %q", messages[1].Role)
 	}
 
-	user := messages[1].Content
+	system := messages[0].Content
 	for _, want := range []string{
-		"Paid AWS bill 100 USD using company credit card",
+		"bookkeeping reasoning engine",
+		`"side":"debit"`,
+		"minor currency units",
 		"Acme Cloud Co.",
 		"5200 Cloud Hosting",
 		"2100 Credit Card",
 		"2026-05",
 		"hq",
 		"eu",
-		`"side":"debit"`,
-		"minor currency units",
 	} {
-		if !strings.Contains(user, want) {
-			t.Errorf("user prompt missing %q\n--- prompt ---\n%s", want, user)
+		if !strings.Contains(system, want) {
+			t.Errorf("system prompt missing %q\n--- prompt ---\n%s", want, system)
 		}
 	}
 
@@ -53,9 +53,14 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 		"5900 Legacy Office Rent",
 		"2026-04",
 	} {
-		if strings.Contains(user, hide) {
-			t.Errorf("user prompt should not include %q\n--- prompt ---\n%s", hide, user)
+		if strings.Contains(system, hide) {
+			t.Errorf("system prompt should not include %q\n--- prompt ---\n%s", hide, system)
 		}
+	}
+
+	task := messages[1].Content
+	if !strings.Contains(task, "Paid AWS bill 100 USD using company credit card") {
+		t.Errorf("task message missing the request text\n--- task ---\n%s", task)
 	}
 }
 
@@ -77,7 +82,7 @@ func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 	if len(messages) != 4 {
-		t.Fatalf("expected system + user + 2 event messages, got %d", len(messages))
+		t.Fatalf("expected system + task + 2 event messages, got %d", len(messages))
 	}
 	if messages[2].Role != llm.MessageRoleAssistant {
 		t.Errorf("assistant event should map to assistant role, got %q", messages[2].Role)
