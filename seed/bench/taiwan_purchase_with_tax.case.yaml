@@ -1,0 +1,15 @@
+name: taiwan_purchase_with_tax
+description: 台北總公司賒購商品 NT$10,000，加 5% 營業稅 NT$500，應付帳款 NT$10,500（永續盤存制，借記商品存貨）。
+scenario: ../taiwan_ledger.yaml
+request: "台北總公司向供應商賒帳進貨商品 NT$10,000，加 5% 營業稅 NT$500，共計應付帳款 NT$10,500。"
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: TWD
+    lines:
+      - { account_code: "1211", side: debit,  amount: 10000, branch_id: hq }
+      - { account_code: "1281", side: debit,  amount:   500, branch_id: hq }
+      - { account_code: "2141", side: credit, amount: 10500, branch_id: hq }
+options:
+  max_turns: 3

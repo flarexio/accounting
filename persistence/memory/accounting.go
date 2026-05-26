@@ -10,10 +10,12 @@ import (
 	"github.com/flarexio/accounting"
 )
 
-// accountingRepository is the in-memory accounting.LedgerRepository. All
-// operations are safe for concurrent use; entries and their Lines are cloned
-// in and out so callers cannot mutate stored state through a returned value.
-type accountingRepository struct {
+// Repository is the in-memory accounting.LedgerRepository. All operations are
+// safe for concurrent use; entries and their Lines are cloned in and out so
+// callers cannot mutate stored state through a returned value. The type is
+// exported so callers that need its non-interface methods (e.g. ClearJournals
+// in benchmarks) can hold the concrete pointer.
+type Repository struct {
 	mu       sync.RWMutex
 	company  *accounting.Company
 	accounts map[string]accounting.Account
@@ -26,16 +28,19 @@ type accountingRepository struct {
 }
 
 // Option configures an in-memory repository at construction time.
-type Option func(*accountingRepository)
+type Option func(*Repository)
 
 // WithSearcher routes FindAccounts to s when NameContains is set, and indexes every PutAccount through it.
 func WithSearcher(s accounting.AccountSearcher) Option {
-	return func(r *accountingRepository) { r.searcher = s }
+	return func(r *Repository) { r.searcher = s }
 }
 
-// NewAccountingRepository returns an empty in-memory accounting.LedgerRepository.
-func NewAccountingRepository(opts ...Option) accounting.LedgerRepository {
-	r := &accountingRepository{
+// NewAccountingRepository returns an empty in-memory Repository. The concrete
+// pointer satisfies accounting.LedgerRepository for callers that only need the
+// interface, and exposes ClearJournals for callers that need to reset ledger
+// state between runs.
+func NewAccountingRepository(opts ...Option) *Repository {
+	r := &Repository{
 		accounts: make(map[string]accounting.Account),
 		branches: make(map[string]accounting.Branch),
 		periods:  make(map[string]accounting.Period),
@@ -50,28 +55,28 @@ func NewAccountingRepository(opts ...Option) accounting.LedgerRepository {
 
 const findAccountsSearcherLimit = 20
 
-func (r *accountingRepository) Account(_ context.Context, code string) (accounting.Account, bool, error) {
+func (r *Repository) Account(_ context.Context, code string) (accounting.Account, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	a, ok := r.accounts[code]
 	return a, ok, nil
 }
 
-func (r *accountingRepository) Period(_ context.Context, id string) (accounting.Period, bool, error) {
+func (r *Repository) Period(_ context.Context, id string) (accounting.Period, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	p, ok := r.periods[id]
 	return p, ok, nil
 }
 
-func (r *accountingRepository) Branch(_ context.Context, id string) (accounting.Branch, bool, error) {
+func (r *Repository) Branch(_ context.Context, id string) (accounting.Branch, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	b, ok := r.branches[id]
 	return b, ok, nil
 }
 
-func (r *accountingRepository) Entry(_ context.Context, id string) (accounting.JournalEntry, bool, error) {
+func (r *Repository) Entry(_ context.Context, id string) (accounting.JournalEntry, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	idx, ok := r.entryIdx[id]
@@ -81,7 +86,7 @@ func (r *accountingRepository) Entry(_ context.Context, id string) (accounting.J
 	return cloneAccountingEntry(r.entries[idx]), true, nil
 }
 
-func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account, error) {
+func (r *Repository) Accounts(_ context.Context) ([]accounting.Account, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]accounting.Account, 0, len(r.accounts))
@@ -92,7 +97,7 @@ func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account
 }
 
 // FindAccounts honors Type and ActiveOnly; NameContains is delegated to the wired AccountSearcher and ignored when none is set.
-func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
+func (r *Repository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
 	needle := strings.TrimSpace(filter.NameContains)
 	if needle != "" && r.searcher != nil {
 		return r.searcher.Search(ctx, needle, filter, findAccountsSearcherLimit)
@@ -113,7 +118,7 @@ func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounti
 	return out, nil
 }
 
-func (r *accountingRepository) Periods(_ context.Context) ([]accounting.Period, error) {
+func (r *Repository) Periods(_ context.Context) ([]accounting.Period, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]accounting.Period, 0, len(r.periods))
@@ -123,7 +128,7 @@ func (r *accountingRepository) Periods(_ context.Context) ([]accounting.Period, 
 	return out, nil
 }
 
-func (r *accountingRepository) Branches(_ context.Context) ([]accounting.Branch, error) {
+func (r *Repository) Branches(_ context.Context) ([]accounting.Branch, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]accounting.Branch, 0, len(r.branches))
@@ -133,7 +138,7 @@ func (r *accountingRepository) Branches(_ context.Context) ([]accounting.Branch,
 	return out, nil
 }
 
-func (r *accountingRepository) Entries(_ context.Context) ([]accounting.JournalEntry, error) {
+func (r *Repository) Entries(_ context.Context) ([]accounting.JournalEntry, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]accounting.JournalEntry, len(r.entries))
@@ -143,7 +148,7 @@ func (r *accountingRepository) Entries(_ context.Context) ([]accounting.JournalE
 	return out, nil
 }
 
-func (r *accountingRepository) Company(_ context.Context) (accounting.Company, bool, error) {
+func (r *Repository) Company(_ context.Context) (accounting.Company, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.company == nil {
@@ -152,14 +157,14 @@ func (r *accountingRepository) Company(_ context.Context) (accounting.Company, b
 	return *r.company, true, nil
 }
 
-func (r *accountingRepository) SetCompany(_ context.Context, c accounting.Company) error {
+func (r *Repository) SetCompany(_ context.Context, c accounting.Company) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.company = &c
 	return nil
 }
 
-func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
+func (r *Repository) PutAccount(ctx context.Context, a accounting.Account) error {
 	r.mu.Lock()
 	r.accounts[a.Code] = a
 	r.mu.Unlock()
@@ -169,14 +174,14 @@ func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Acco
 	return nil
 }
 
-func (r *accountingRepository) PutPeriod(_ context.Context, p accounting.Period) error {
+func (r *Repository) PutPeriod(_ context.Context, p accounting.Period) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.periods[p.ID] = p
 	return nil
 }
 
-func (r *accountingRepository) PutBranch(_ context.Context, b accounting.Branch) error {
+func (r *Repository) PutBranch(_ context.Context, b accounting.Branch) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.branches[b.ID] = b
@@ -186,7 +191,7 @@ func (r *accountingRepository) PutBranch(_ context.Context, b accounting.Branch)
 // Apply writes the entry and advances LastSequence for evt.Subject under one
 // mutex, so a concurrent LastSequence reader cannot see the entry without
 // also seeing the new sequence.
-func (r *accountingRepository) Apply(_ context.Context, evt accounting.JournalPosted) error {
+func (r *Repository) Apply(_ context.Context, evt accounting.JournalPosted) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	stored := cloneAccountingEntry(evt.Entry)
@@ -198,7 +203,20 @@ func (r *accountingRepository) Apply(_ context.Context, evt accounting.JournalPo
 	return nil
 }
 
-func (r *accountingRepository) LastSequence(_ context.Context, subject string) (uint64, error) {
+// ClearJournals drops every posted entry and resets per-subject sequence
+// counters; the chart of accounts, periods, branches, company, and any
+// attached searcher are preserved so the same Repository can be reused across
+// benchmark iterations without paying the seed-time embedding cost again.
+func (r *Repository) ClearJournals(_ context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.entries = nil
+	r.entryIdx = make(map[string]int)
+	r.lastSeq = make(map[string]uint64)
+	return nil
+}
+
+func (r *Repository) LastSequence(_ context.Context, subject string) (uint64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.lastSeq[subject], nil

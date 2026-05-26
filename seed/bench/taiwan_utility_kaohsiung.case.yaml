@@ -1,0 +1,14 @@
+name: taiwan_utility_kaohsiung
+description: 高雄營業所五月份水電費 NT$8,000 由銀行存款扣繳。
+scenario: ../taiwan_ledger.yaml
+request: "高雄營業所五月份水電費 NT$8,000，已自公司銀行存款帳戶扣繳。"
+gold:
+  kind: post_journal
+  post_journal:
+    period_id: "2026-05"
+    currency: TWD
+    lines:
+      - { account_code: "6109", side: debit,  amount: 8000, branch_id: ks }
+      - { account_code: "1103", side: credit, amount: 8000, branch_id: ks }
+options:
+  max_turns: 3
