@@ -43,15 +43,28 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
+// LLMKind names the reasoning engine provider; empty defaults to LLMOpenAI.
+type LLMKind string
+
+const (
+	LLMOpenAI    LLMKind = "openai"
+	LLMAnthropic LLMKind = "anthropic"
+)
+
 // LLM holds the reasoning engine configuration.
 type LLM struct {
-	Model   string `yaml:"model"`
-	APIKey  string `yaml:"api_key"`
-	BaseURL string `yaml:"base_url"`
+	// Kind selects the provider adapter; defaults to openai.
+	Kind    LLMKind `yaml:"kind"`
+	Model   string  `yaml:"model"`
+	APIKey  string  `yaml:"api_key"`
+	BaseURL string  `yaml:"base_url"`
 	// DisableStrictSchemaWithTools drops strict json_schema response_format on
 	// turns that pass tools. Set true for llama.cpp-style servers whose
-	// grammar engine enforces response_format at the sampler.
+	// grammar engine enforces response_format at the sampler. Openai-only.
 	DisableStrictSchemaWithTools bool `yaml:"disable_strict_schema_with_tools"`
+	// MaxTokens caps the response length. Anthropic-only; zero lets the
+	// adapter pick its default. Ignored by openai.
+	MaxTokens int64 `yaml:"max_tokens"`
 }
 
 // Embedding holds the embedding model used by the postgres adapter to populate
@@ -125,6 +138,10 @@ func (c *Config) applyDefaults() {
 		c.Messaging.Kind = MessagingInproc
 	}
 
+	if c.LLM.Kind == "" {
+		c.LLM.Kind = LLMOpenAI
+	}
+
 	if c.Embedding.Model == "" {
 		c.Embedding.Model = "text-embedding-3-small"
 	}
@@ -161,6 +178,16 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("messaging.kind %q is not supported (inproc|nats)", c.Messaging.Kind))
+	}
+
+	switch c.LLM.Kind {
+	case LLMOpenAI, LLMAnthropic:
+	default:
+		errs = append(errs, fmt.Errorf("llm.kind %q is not supported (openai|anthropic)", c.LLM.Kind))
+	}
+
+	if c.LLM.MaxTokens < 0 {
+		errs = append(errs, fmt.Errorf("llm.max_tokens must be non-negative (got %d)", c.LLM.MaxTokens))
 	}
 
 	if c.Embedding.Dimensions <= 0 {

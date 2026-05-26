@@ -16,6 +16,7 @@ import (
 	"github.com/flarexio/accounting/messaging/inproc"
 	"github.com/flarexio/accounting/persistence/memory"
 	"github.com/flarexio/stoa/llm"
+	"github.com/flarexio/stoa/llm/anthropic"
 	"github.com/flarexio/stoa/llm/openai"
 
 	embedopenai "github.com/flarexio/accounting/embedding/openai"
@@ -107,24 +108,42 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 	return accounting.Period{}, nil
 }
 
-// buildBookEngine wires the OpenAI bookkeeper reasoning engine.
+// buildBookEngine wires the bookkeeper reasoning engine selected by llmCfg.Kind.
 func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+		return nil, fmt.Errorf("book-run: %s engine: %w", llmCfg.Kind, err)
 	}
-	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
-		APIKey:                       llmCfg.APIKey,
-		BaseURL:                      llmCfg.BaseURL,
-		Model:                        llmCfg.Model,
-		IntentSchema:                 bookkeeping.IntentSchema(),
-		DisableStrictSchemaWithTools: llmCfg.DisableStrictSchemaWithTools,
-		Renderer:                     renderer,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+	switch llmCfg.Kind {
+	case "", config.LLMOpenAI:
+		adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
+			APIKey:                       llmCfg.APIKey,
+			BaseURL:                      llmCfg.BaseURL,
+			Model:                        llmCfg.Model,
+			IntentSchema:                 bookkeeping.IntentSchema(),
+			DisableStrictSchemaWithTools: llmCfg.DisableStrictSchemaWithTools,
+			Renderer:                     renderer,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("book-run: openai engine: %w", err)
+		}
+		return adapter, nil
+	case config.LLMAnthropic:
+		adapter, err := anthropic.NewAdapter(anthropic.Config[bookkeeping.Intent]{
+			APIKey:       llmCfg.APIKey,
+			BaseURL:      llmCfg.BaseURL,
+			Model:        llmCfg.Model,
+			MaxTokens:    llmCfg.MaxTokens,
+			IntentSchema: bookkeeping.IntentSchema(),
+			Renderer:     renderer,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("book-run: anthropic engine: %w", err)
+		}
+		return adapter, nil
+	default:
+		return nil, fmt.Errorf("book-run: unsupported llm kind %q", llmCfg.Kind)
 	}
-	return adapter, nil
 }
 
 // extractFeedback collects validation/execution-error content for the CLI report.

@@ -16,8 +16,9 @@ import (
 	"github.com/flarexio/accounting/benchmark"
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/config"
-	embedopenai "github.com/flarexio/accounting/embedding/openai"
 	"github.com/flarexio/stoa/llm"
+
+	embedopenai "github.com/flarexio/accounting/embedding/openai"
 )
 
 func newBenchCommand(stdout io.Writer) *cli.Command {
@@ -97,11 +98,19 @@ func runBench(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return fmt.Errorf("bench: %w", err)
 	}
 	llmCfg := cfg.LLM
-	if llmCfg.APIKey == "" && os.Getenv("OPENAI_API_KEY") == "" {
-		return errors.New("bench: openai engine requires config.yaml llm.api_key or OPENAI_API_KEY")
+	kind := llmCfg.Kind
+	if kind == "" {
+		kind = config.LLMOpenAI
+	}
+	envKey := llmAPIKeyEnv(kind)
+	if llmCfg.APIKey == "" && os.Getenv(envKey) == "" {
+		return fmt.Errorf("bench: %s engine requires config.yaml llm.api_key or %s", kind, envKey)
 	}
 
 	for i := range models {
+		if models[i].Kind == "" {
+			models[i].Kind = string(kind)
+		}
 		if models[i].APIKey == "" {
 			models[i].APIKey = llmCfg.APIKey
 		}
@@ -109,6 +118,9 @@ func runBench(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 			models[i].BaseURL = llmCfg.BaseURL
 		}
 		models[i].DisableStrictSchemaWithTools = llmCfg.DisableStrictSchemaWithTools
+		if models[i].MaxTokens == 0 {
+			models[i].MaxTokens = llmCfg.MaxTokens
+		}
 	}
 
 	var embedder accounting.Embedder
@@ -144,10 +156,12 @@ func runBench(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 func benchEngineFactory() benchmark.EngineFactory {
 	return func(ctx context.Context, repo accounting.LedgerRepository, m benchmark.ModelConfig) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 		return buildBookEngine(ctx, repo, config.LLM{
+			Kind:                         config.LLMKind(m.Kind),
 			Model:                        m.Model,
 			APIKey:                       m.APIKey,
 			BaseURL:                      m.BaseURL,
 			DisableStrictSchemaWithTools: m.DisableStrictSchemaWithTools,
+			MaxTokens:                    m.MaxTokens,
 		})
 	}
 }

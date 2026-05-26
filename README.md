@@ -41,7 +41,7 @@ The packages keep dependencies flowing inward:
 - `messaging/*`: event bus adapters
 - `cmd/ledger`: CLI composition
 
-The shared Stoa packages provide the general harness contracts: `github.com/flarexio/stoa/llm`, `github.com/flarexio/stoa/llm/openai`, and `github.com/flarexio/stoa/harness/loop`.
+The shared Stoa packages provide the general harness contracts: `github.com/flarexio/stoa/llm`, `github.com/flarexio/stoa/llm/openai`, `github.com/flarexio/stoa/llm/anthropic`, and `github.com/flarexio/stoa/harness/loop`.
 
 See [docs/architecture.md](docs/architecture.md) for the ledger model, validator invariants, event-driven posting flow, and current out-of-scope boundaries.
 
@@ -101,24 +101,40 @@ migrate -path persistence/postgres/migrations \
 
 The compose database uses user `stoa`, password `stoa`, and database `accounting`.
 
-## OpenAI
+## LLM Providers
 
-The bookkeeper drives an OpenAI-compatible API. Configure `llm` in `config.yaml`:
+The bookkeeper selects a provider adapter via `llm.kind` in `config.yaml`. Supported kinds are `openai` (default) and `anthropic`.
+
+### OpenAI
 
 ```yaml
 llm:
+  kind: openai
   model: gpt-5.5
   api_key: ${OPENAI_API_KEY}  # or set OPENAI_API_KEY in the environment
   base_url: https://api.openai.com/v1  # omit for default; set for compatible providers
 ```
 
-You can override `llm.model` with `--model <model>` on `book-run`. The API key can come from `llm.api_key` or the `OPENAI_API_KEY` environment variable, with config taking precedence. `llm.base_url` defaults to `$OPENAI_BASE_URL` when unset.
+`llm.api_key` falls back to `OPENAI_API_KEY`; `llm.base_url` falls back to `OPENAI_BASE_URL`. Override the model per run with `--model <model>` on `book-run`.
 
 The real API integration test is gated separately:
 
 ```bash
 ACCOUNTING_RUN_OPENAI_TESTS=1 go test ./agent
 ```
+
+### Anthropic
+
+```yaml
+llm:
+  kind: anthropic
+  model: claude-opus-4-7
+  api_key: ${ANTHROPIC_API_KEY}  # or set ANTHROPIC_API_KEY in the environment
+  base_url: ""                   # omit for default; set for self-hosted gateways
+  max_tokens: 4096               # caps the Messages response; 0 = adapter default
+```
+
+`llm.api_key` falls back to `ANTHROPIC_API_KEY`; `llm.base_url` falls back to `ANTHROPIC_BASE_URL`. The Anthropic Messages API requires `max_tokens` — the adapter defaults to 4096 when omitted. `disable_strict_schema_with_tools` is openai-only and ignored here.
 
 ## Benchmarks
 

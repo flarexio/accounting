@@ -26,7 +26,7 @@ It is also a [Stoa](https://github.com/flarexio/stoa)-style agent harness: domai
 
 Clean Architecture, organized by feature and adapter boundary. Dependencies point inward: Infrastructure → Interface Adapters → Use Cases → Domain. See [docs/architecture.md](docs/architecture.md) for the ledger model, validator invariants, event-driven posting flow, and current out-of-scope boundaries.
 
-The shared Stoa packages provide the general harness contracts: `github.com/flarexio/stoa/llm`, `github.com/flarexio/stoa/llm/openai`, and `github.com/flarexio/stoa/harness/loop`.
+The shared Stoa packages provide the general harness contracts: `github.com/flarexio/stoa/llm`, `github.com/flarexio/stoa/llm/openai`, `github.com/flarexio/stoa/llm/anthropic`, and `github.com/flarexio/stoa/harness/loop`. The provider adapter is chosen by `llm.kind` in `config.yaml`.
 
 ## Critical Rules
 

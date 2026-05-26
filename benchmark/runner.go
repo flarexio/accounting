@@ -15,13 +15,16 @@ import (
 )
 
 // ModelConfig identifies one reasoning engine configuration under test.
-// Name labels it in the report; if empty, Model is used.
+// Name labels it in the report; if empty, Model is used. Kind selects the
+// provider adapter (empty defaults to openai).
 type ModelConfig struct {
 	Name                         string
+	Kind                         string
 	Model                        string
 	APIKey                       string
 	BaseURL                      string
 	DisableStrictSchemaWithTools bool
+	MaxTokens                    int64
 }
 
 // DisplayName is Name when set, otherwise Model.

@@ -228,6 +228,64 @@ func TestLoad_LLMDisableStrictSchemaWithTools(t *testing.T) {
 	}
 }
 
+func TestLoad_LLMKindDefaultsToOpenAI(t *testing.T) {
+	path := writeConfig(t, "llm:\n  model: gpt-5.5\n")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.LLM.Kind != config.LLMOpenAI {
+		t.Errorf("llm kind default: want openai, got %q", cfg.LLM.Kind)
+	}
+}
+
+func TestLoad_LLMAnthropicKindAndMaxTokens(t *testing.T) {
+	body := `llm:
+  kind: anthropic
+  model: claude-opus-4-7
+  api_key: sk-ant-test
+  max_tokens: 8192
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.LLM.Kind != config.LLMAnthropic {
+		t.Errorf("kind: got %q, want anthropic", cfg.LLM.Kind)
+	}
+	if cfg.LLM.Model != "claude-opus-4-7" {
+		t.Errorf("model: got %q, want claude-opus-4-7", cfg.LLM.Model)
+	}
+	if cfg.LLM.MaxTokens != 8192 {
+		t.Errorf("max_tokens: got %d, want 8192", cfg.LLM.MaxTokens)
+	}
+}
+
+func TestLoad_LLMRejectsUnknownKind(t *testing.T) {
+	path := writeConfig(t, "llm:\n  kind: gemini\n  model: x\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unsupported llm kind")
+	}
+	if !strings.Contains(err.Error(), "gemini") {
+		t.Errorf("error should name the bad kind, got %v", err)
+	}
+}
+
+func TestLoad_LLMRejectsNegativeMaxTokens(t *testing.T) {
+	path := writeConfig(t, "llm:\n  kind: anthropic\n  model: claude-opus-4-7\n  max_tokens: -1\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for negative max_tokens")
+	}
+	if !strings.Contains(err.Error(), "max_tokens") {
+		t.Errorf("error should mention max_tokens, got %v", err)
+	}
+}
+
 func TestLoad_LLMUnknownFieldRejected(t *testing.T) {
 	path := writeConfig(t, "llm:\n  model: gpt-5.5\n  engine: openai\n")
 	_, err := config.Load(path)

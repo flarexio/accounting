@@ -79,7 +79,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		llmCfg.Model = model
 	}
 
-	if err := validateOpenAIConfig(llmCfg); err != nil {
+	if err := validateLLMConfig(llmCfg); err != nil {
 		return err
 	}
 
@@ -134,13 +134,30 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return runErr
 }
 
-// validateOpenAIConfig ensures model and an API key source are present.
-func validateOpenAIConfig(llmCfg config.LLM) error {
-	if llmCfg.Model == "" {
-		return errors.New("book-run: openai engine requires --model or config.yaml llm.model")
+// validateLLMConfig ensures model and an API key source are present for the
+// selected provider; empty Kind is treated as openai.
+func validateLLMConfig(llmCfg config.LLM) error {
+	kind := llmCfg.Kind
+	if kind == "" {
+		kind = config.LLMOpenAI
 	}
-	if llmCfg.APIKey == "" && os.Getenv("OPENAI_API_KEY") == "" {
-		return errors.New("book-run: openai engine requires config.yaml llm.api_key or OPENAI_API_KEY")
+	if llmCfg.Model == "" {
+		return fmt.Errorf("book-run: %s engine requires --model or config.yaml llm.model", kind)
+	}
+	envKey := llmAPIKeyEnv(kind)
+	if llmCfg.APIKey == "" && os.Getenv(envKey) == "" {
+		return fmt.Errorf("book-run: %s engine requires config.yaml llm.api_key or %s", kind, envKey)
 	}
 	return nil
+}
+
+// llmAPIKeyEnv returns the environment variable the provider adapter falls
+// back to when llm.api_key is empty.
+func llmAPIKeyEnv(kind config.LLMKind) string {
+	switch kind {
+	case config.LLMAnthropic:
+		return "ANTHROPIC_API_KEY"
+	default:
+		return "OPENAI_API_KEY"
+	}
 }

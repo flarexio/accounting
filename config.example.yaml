@@ -21,16 +21,31 @@ messaging:
     consumer: accounting-book-run
 
 llm:
-  # OpenAI-compatible reasoning engine. --model overrides model.
+  # kind selects the provider adapter; defaults to openai.
+  #   openai    -> stoa/llm/openai;    uses OPENAI_API_KEY when api_key is empty.
+  #   anthropic -> stoa/llm/anthropic; uses ANTHROPIC_API_KEY when api_key is empty.
+  kind: openai
+  # --model overrides this per run.
   model: gpt-5.5
-  # api_key may be omitted to use OPENAI_API_KEY from the environment.
+  # api_key may be omitted to use the provider's env var (see kind above).
   api_key: ${OPENAI_API_KEY}
-  # base_url may be omitted for default OpenAI; set for OpenAI-compatible providers.
+  # base_url may be omitted for the provider default; set for OpenAI-compatible
+  # gateways or self-hosted Anthropic-compatible endpoints.
   base_url: https://api.openai.com/v1
-  # Set true only for llama.cpp-style servers whose grammar engine enforces
-  # response_format at the sampler -- strict json_schema would otherwise block
-  # native tool_calls. Leave false (default) for OpenAI and vLLM.
+  # Openai-only. Set true only for llama.cpp-style servers whose grammar engine
+  # enforces response_format at the sampler -- strict json_schema would otherwise
+  # block native tool_calls. Leave false (default) for OpenAI and vLLM.
   disable_strict_schema_with_tools: false
+  # Anthropic-only. Caps the Messages response length; zero lets the adapter
+  # pick its default (4096). Ignored when kind is openai.
+  max_tokens: 0
+
+# Example Anthropic block (uncomment and replace the openai block above):
+# llm:
+#   kind: anthropic
+#   model: claude-opus-4-7
+#   api_key: ${ANTHROPIC_API_KEY}
+#   max_tokens: 4096
 
 embedding:
   # Used only by the postgres adapter to populate the accounts.embedding column
