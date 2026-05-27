@@ -29,12 +29,22 @@ type LedgerRepository interface {
 	PutPeriod(ctx context.Context, p Period) error
 	PutBranch(ctx context.Context, b Branch) error
 
-	// Apply writes the entry and bumps LastSequence for evt.Subject atomically.
+	// Apply writes the entry, every JournalRelation in evt.Relations, and
+	// bumps LastSequence for evt.Subject atomically.
 	Apply(ctx context.Context, evt JournalPosted) error
 
 	// LastSequence returns the broker sequence of the most recent applied
 	// JournalPosted on subject, or 0 when none has been seen.
 	LastSequence(ctx context.Context, subject string) (uint64, error)
+
+	// Relation looks up a single relation row by composite identity.
+	Relation(ctx context.Context, fromEntry, toEntry string) (JournalRelation, bool, error)
+
+	// RelationsFrom returns every relation whose FromEntry equals entryID.
+	RelationsFrom(ctx context.Context, entryID string) ([]JournalRelation, error)
+
+	// RelationsTo returns every relation whose ToEntry equals entryID.
+	RelationsTo(ctx context.Context, entryID string) ([]JournalRelation, error)
 }
 
 // AccountFilter narrows FindAccounts. NameContains is a semantic hint; Type and ActiveOnly are exact.

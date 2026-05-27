@@ -16,15 +16,16 @@ import (
 // exported so callers that need its non-interface methods (e.g. ClearJournals
 // in benchmarks) can hold the concrete pointer.
 type Repository struct {
-	mu       sync.RWMutex
-	company  *accounting.Company
-	accounts map[string]accounting.Account
-	branches map[string]accounting.Branch
-	periods  map[string]accounting.Period
-	entries  []accounting.JournalEntry
-	entryIdx map[string]int
-	lastSeq  map[string]uint64
-	searcher accounting.AccountSearcher
+	mu        sync.RWMutex
+	company   *accounting.Company
+	accounts  map[string]accounting.Account
+	branches  map[string]accounting.Branch
+	periods   map[string]accounting.Period
+	entries   []accounting.JournalEntry
+	entryIdx  map[string]int
+	lastSeq   map[string]uint64
+	relations []accounting.JournalRelation
+	searcher  accounting.AccountSearcher
 }
 
 // Option configures an in-memory repository at construction time.
@@ -194,32 +195,70 @@ func (r *Repository) PutBranch(_ context.Context, b accounting.Branch) error {
 	return nil
 }
 
-// Apply writes the entry and advances LastSequence for evt.Subject under one
-// mutex, so a concurrent LastSequence reader cannot see the entry without
-// also seeing the new sequence.
+// Apply writes the entry, every relation in evt.Relations, and advances
+// LastSequence for evt.Subject under one mutex so a concurrent reader cannot
+// see the entry without its relations or its sequence.
 func (r *Repository) Apply(_ context.Context, evt accounting.JournalPosted) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	stored := cloneAccountingEntry(evt.Entry)
 	r.entries = append(r.entries, stored)
 	r.entryIdx[stored.ID] = len(r.entries) - 1
+	r.relations = append(r.relations, evt.Relations...)
 	if evt.Subject != "" && evt.Sequence > r.lastSeq[evt.Subject] {
 		r.lastSeq[evt.Subject] = evt.Sequence
 	}
 	return nil
 }
 
-// ClearJournals drops every posted entry and resets per-subject sequence
-// counters; the chart of accounts, periods, branches, company, and any
-// attached searcher are preserved so the same Repository can be reused across
-// benchmark iterations without paying the seed-time embedding cost again.
+// ClearJournals drops every posted entry, every relation, and resets
+// per-subject sequence counters; the chart of accounts, periods, branches,
+// company, and any attached searcher are preserved so the same Repository
+// can be reused across benchmark iterations without paying the seed-time
+// embedding cost again.
 func (r *Repository) ClearJournals(_ context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.entries = nil
 	r.entryIdx = make(map[string]int)
 	r.lastSeq = make(map[string]uint64)
+	r.relations = nil
 	return nil
+}
+
+func (r *Repository) Relation(_ context.Context, fromEntry, toEntry string) (accounting.JournalRelation, bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, rel := range r.relations {
+		if rel.FromEntry == fromEntry && rel.ToEntry == toEntry {
+			return rel, true, nil
+		}
+	}
+	return accounting.JournalRelation{}, false, nil
+}
+
+func (r *Repository) RelationsFrom(_ context.Context, entryID string) ([]accounting.JournalRelation, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []accounting.JournalRelation
+	for _, rel := range r.relations {
+		if rel.FromEntry == entryID {
+			out = append(out, rel)
+		}
+	}
+	return out, nil
+}
+
+func (r *Repository) RelationsTo(_ context.Context, entryID string) ([]accounting.JournalRelation, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []accounting.JournalRelation
+	for _, rel := range r.relations {
+		if rel.ToEntry == entryID {
+			out = append(out, rel)
+		}
+	}
+	return out, nil
 }
 
 func (r *Repository) LastSequence(_ context.Context, subject string) (uint64, error) {

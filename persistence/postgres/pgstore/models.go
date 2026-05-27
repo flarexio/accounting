@@ -49,6 +49,15 @@ type JournalLine struct {
 	Tags        []byte
 }
 
+type JournalRelation struct {
+	FromEntry string
+	ToEntry   string
+	Type      string
+	Reason    string
+	Amount    int64
+	Note      string
+}
+
 type Period struct {
 	ID      string
 	StartOn pgtype.Date

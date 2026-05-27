@@ -98,3 +98,29 @@ INSERT INTO subject_offsets (subject, last_sequence)
 VALUES ($1, $2)
 ON CONFLICT (subject) DO UPDATE
 SET last_sequence = GREATEST(subject_offsets.last_sequence, EXCLUDED.last_sequence);
+
+-- name: GetRelation :one
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE from_entry = $1 AND to_entry = $2;
+
+-- name: ListRelationsFrom :many
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE from_entry = $1
+ORDER BY to_entry;
+
+-- name: ListRelationsTo :many
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE to_entry = $1
+ORDER BY from_entry;
+
+-- name: InsertRelation :exec
+-- Idempotent for the same reason as InsertEntry: NATS may redeliver a
+-- JournalPosted whose relations were already written; the composite PK lets
+-- the duplicate collapse to the same row.
+INSERT INTO journal_relations (
+    from_entry, to_entry, type, reason, amount, note
+) VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (from_entry, to_entry) DO NOTHING;

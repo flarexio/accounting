@@ -30,10 +30,13 @@ type RejectIntent struct {
 	Reason string `json:"reason"`
 }
 
-// ReverseIntent is the payload of a reverse_journal Intent.
+// ReverseIntent is the payload of a reverse_journal Intent. Reason is the
+// classification stored on the resulting JournalRelation; Note is free-text
+// rationale appended to the reversing entry's description.
 type ReverseIntent struct {
-	EntryID string `json:"entry_id"`
-	Reason  string `json:"reason,omitempty"`
+	EntryID string                    `json:"entry_id"`
+	Reason  accounting.RelationReason `json:"reason"`
+	Note    string                    `json:"note,omitempty"`
 }
 
 // IntentDescriptor is the prompt-facing description of one Intent variant, so
@@ -47,7 +50,7 @@ type IntentDescriptor struct {
 const (
 	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
 
-	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
+	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"<amount_error|account_error|duplicate|customer_cancel|period_end|other>","note":"..."}`
 
 	rejectArgsShape = `{"reason":"<explanation why the request cannot be fulfilled>"}`
 )
@@ -138,10 +141,15 @@ const intentSchemaJSON = `{
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["entry_id", "reason"],
+          "required": ["entry_id", "reason", "note"],
           "properties": {
             "entry_id": { "type": "string", "description": "JE-id of the posted entry to reverse." },
-            "reason": { "type": "string" }
+            "reason": {
+              "type": "string",
+              "enum": ["amount_error", "account_error", "duplicate", "customer_cancel", "period_end", "other"],
+              "description": "Classification of why the entry is being reversed; pick 'other' when no specific code fits."
+            },
+            "note": { "type": "string", "description": "Free-text rationale appended to the reversal description; may be empty." }
           }
         }
       ]
