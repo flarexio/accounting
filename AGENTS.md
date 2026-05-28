@@ -11,7 +11,7 @@ It is also a [Stoa](https://github.com/flarexio/stoa)-style agent harness: domai
 ### Feature domains
 
 - **Ledger domain** (`./`): companies, accounts, periods, branches, journal entries, scenarios, repository contracts, and validators.
-- **Bookkeeping use case** (`bookkeeping/`): typed intents, posting/reversal handlers, registry, and event bus contracts.
+- **Bookkeeping use case** (`bookkeeping/`): typed intents, posting/reversal handlers, entry-relation tracking, registry, and event bus contracts.
 - **Bookkeeper agent** (`agent/`): LLM-driven loop, tools, and prompt rendering on top of the shared Stoa harness.
 - **Adapters** (`persistence/*`, `messaging/*`): Postgres/memory repositories and NATS/in-process event buses.
 
@@ -54,6 +54,7 @@ To keep knowing and doing unified, every agent follows this cycle:
 - **Validation and feedback are mandatory.** Never rely on prompt instructions to enforce accounting invariants; domain errors flow back into the next reasoning cycle as typed events.
 - **Ledger is the CLI name, accounting is the bounded context.** Keep the Go module as `github.com/flarexio/accounting`; keep the runnable command under `cmd/ledger`.
 - **Event-sourced projection.** Bookkeeping use cases publish events; a single subscribed `Apply` handler is the only writer to the `LedgerRepository` projection.
+- **Structural reversal/correction tracking.** A reversal entry is linked to its original through a `JournalRelation` (append-only, composite identity `(from_entry, to_entry)`), not a description string. Relations ride on the same `JournalPosted` event as the reversing entry and `Apply` writes both in one transaction, so the projection never sees an entry without its relation. The same model is reserved for future business operations (settlement, period-end closing) under different `type` discriminators rather than each spawning its own table.
 - **Business dates are dates, not instants.** `JournalEntry.Date`, `JournalIntent.Date`, and `Period.Start/End` are `accounting.Date` (year/month/day) over Postgres `DATE`, interpreted in the company's timezone via `Company.TimeZone` (IANA name like `Asia/Taipei`). The agent prompt names the timezone so the LLM knows what zone its `YYYY-MM-DD` outputs live in. `JournalEntry.PostedAt` stays `time.Time` / `TIMESTAMPTZ` — it is a real instant. Never derive a business date from a `TIMESTAMPTZ` without an explicit location.
 - **Every line carries a branch_id.** Branches are not an optional reporting tag; every journal line must reference a branch and all lines on one entry share the same branch_id. Single-location companies seed one branch (convention: `{id: main, name: ...}`). The TUI picks the operator's current branch at startup and the prompt's `OperatorBranchID` tells the LLM to default to it when the user doesn't specify; the validator still enforces the invariant regardless of where the value came from.
 

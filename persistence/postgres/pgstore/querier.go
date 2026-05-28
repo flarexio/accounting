@@ -14,6 +14,7 @@ type Querier interface {
 	GetEntry(ctx context.Context, id string) (JournalEntry, error)
 	GetLastSequence(ctx context.Context, subject string) (int64, error)
 	GetPeriod(ctx context.Context, id string) (Period, error)
+	GetRelation(ctx context.Context, arg GetRelationParams) (JournalRelation, error)
 	// Idempotent: NATS JetStream redelivers on consumer crash after commit but
 	// before Ack; a duplicate INSERT would loop forever as Nak'd unique-key
 	// violations. Entry.ID is derived from the broker sequence so duplicates
@@ -21,12 +22,18 @@ type Querier interface {
 	InsertEntry(ctx context.Context, arg InsertEntryParams) error
 	// Idempotent for the same reason as InsertEntry.
 	InsertLine(ctx context.Context, arg InsertLineParams) error
+	// Idempotent for the same reason as InsertEntry: NATS may redeliver a
+	// JournalPosted whose relations were already written; the composite PK lets
+	// the duplicate collapse to the same row.
+	InsertRelation(ctx context.Context, arg InsertRelationParams) error
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListBranches(ctx context.Context) ([]Branch, error)
 	ListEntries(ctx context.Context) ([]JournalEntry, error)
 	ListEntryLines(ctx context.Context, entryID string) ([]JournalLine, error)
 	ListLinesForEntries(ctx context.Context, dollar_1 []string) ([]JournalLine, error)
 	ListPeriods(ctx context.Context) ([]Period, error)
+	ListRelationsFrom(ctx context.Context, fromEntry string) ([]JournalRelation, error)
+	ListRelationsTo(ctx context.Context, toEntry string) ([]JournalRelation, error)
 	UpsertAccount(ctx context.Context, arg UpsertAccountParams) error
 	UpsertBranch(ctx context.Context, arg UpsertBranchParams) error
 	UpsertLastSequence(ctx context.Context, arg UpsertLastSequenceParams) error

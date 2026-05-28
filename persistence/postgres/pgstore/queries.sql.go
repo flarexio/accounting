@@ -93,6 +93,31 @@ func (q *Queries) GetPeriod(ctx context.Context, id string) (Period, error) {
 	return i, err
 }
 
+const getRelation = `-- name: GetRelation :one
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE from_entry = $1 AND to_entry = $2
+`
+
+type GetRelationParams struct {
+	FromEntry string
+	ToEntry   string
+}
+
+func (q *Queries) GetRelation(ctx context.Context, arg GetRelationParams) (JournalRelation, error) {
+	row := q.db.QueryRow(ctx, getRelation, arg.FromEntry, arg.ToEntry)
+	var i JournalRelation
+	err := row.Scan(
+		&i.FromEntry,
+		&i.ToEntry,
+		&i.Type,
+		&i.Reason,
+		&i.Amount,
+		&i.Note,
+	)
+	return i, err
+}
+
 const insertEntry = `-- name: InsertEntry :exec
 INSERT INTO journal_entries (
     id, sequence, subject, entry_date, period_id, currency, description, posted_at
@@ -158,6 +183,37 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) error {
 		arg.Memo,
 		arg.BranchID,
 		arg.Tags,
+	)
+	return err
+}
+
+const insertRelation = `-- name: InsertRelation :exec
+INSERT INTO journal_relations (
+    from_entry, to_entry, type, reason, amount, note
+) VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (from_entry, to_entry) DO NOTHING
+`
+
+type InsertRelationParams struct {
+	FromEntry string
+	ToEntry   string
+	Type      string
+	Reason    string
+	Amount    int64
+	Note      string
+}
+
+// Idempotent for the same reason as InsertEntry: NATS may redeliver a
+// JournalPosted whose relations were already written; the composite PK lets
+// the duplicate collapse to the same row.
+func (q *Queries) InsertRelation(ctx context.Context, arg InsertRelationParams) error {
+	_, err := q.db.Exec(ctx, insertRelation,
+		arg.FromEntry,
+		arg.ToEntry,
+		arg.Type,
+		arg.Reason,
+		arg.Amount,
+		arg.Note,
 	)
 	return err
 }
@@ -346,6 +402,74 @@ func (q *Queries) ListPeriods(ctx context.Context) ([]Period, error) {
 			&i.StartOn,
 			&i.EndOn,
 			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRelationsFrom = `-- name: ListRelationsFrom :many
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE from_entry = $1
+ORDER BY to_entry
+`
+
+func (q *Queries) ListRelationsFrom(ctx context.Context, fromEntry string) ([]JournalRelation, error) {
+	rows, err := q.db.Query(ctx, listRelationsFrom, fromEntry)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JournalRelation
+	for rows.Next() {
+		var i JournalRelation
+		if err := rows.Scan(
+			&i.FromEntry,
+			&i.ToEntry,
+			&i.Type,
+			&i.Reason,
+			&i.Amount,
+			&i.Note,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRelationsTo = `-- name: ListRelationsTo :many
+SELECT from_entry, to_entry, type, reason, amount, note
+FROM journal_relations
+WHERE to_entry = $1
+ORDER BY from_entry
+`
+
+func (q *Queries) ListRelationsTo(ctx context.Context, toEntry string) ([]JournalRelation, error) {
+	rows, err := q.db.Query(ctx, listRelationsTo, toEntry)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JournalRelation
+	for rows.Next() {
+		var i JournalRelation
+		if err := rows.Scan(
+			&i.FromEntry,
+			&i.ToEntry,
+			&i.Type,
+			&i.Reason,
+			&i.Amount,
+			&i.Note,
 		); err != nil {
 			return nil, err
 		}

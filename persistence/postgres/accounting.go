@@ -314,9 +314,9 @@ func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branc
 	return nil
 }
 
-// Apply writes the entry, its lines, and the new last-sequence record in one
-// transaction, so a concurrent LastSequence reader cannot see the entry
-// without also seeing the new sequence.
+// Apply writes the entry, its lines, every JournalRelation in evt.Relations,
+// and the new last-sequence record in one transaction, so a concurrent reader
+// cannot see the entry without its relations or its sequence.
 func (r *accountingRepository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -359,6 +359,19 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 		}
 	}
 
+	for _, rel := range evt.Relations {
+		if err := q.InsertRelation(ctx, pgstore.InsertRelationParams{
+			FromEntry: rel.FromEntry,
+			ToEntry:   rel.ToEntry,
+			Type:      string(rel.Type),
+			Reason:    string(rel.Reason),
+			Amount:    rel.Amount,
+			Note:      rel.Note,
+		}); err != nil {
+			return fmt.Errorf("postgres: InsertRelation: %w", err)
+		}
+	}
+
 	if evt.Subject != "" {
 		if err := q.UpsertLastSequence(ctx, pgstore.UpsertLastSequenceParams{
 			Subject:      evt.Subject,
@@ -372,6 +385,55 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 		return fmt.Errorf("postgres: commit: %w", err)
 	}
 	return nil
+}
+
+func (r *accountingRepository) Relation(ctx context.Context, fromEntry, toEntry string) (accounting.JournalRelation, bool, error) {
+	row, err := r.q.GetRelation(ctx, pgstore.GetRelationParams{FromEntry: fromEntry, ToEntry: toEntry})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return accounting.JournalRelation{}, false, nil
+		}
+		return accounting.JournalRelation{}, false, fmt.Errorf("postgres: GetRelation: %w", err)
+	}
+	return relationFromRow(row), true, nil
+}
+
+func (r *accountingRepository) RelationsFrom(ctx context.Context, entryID string) ([]accounting.JournalRelation, error) {
+	rows, err := r.q.ListRelationsFrom(ctx, entryID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: ListRelationsFrom: %w", err)
+	}
+	return relationsFromRows(rows), nil
+}
+
+func (r *accountingRepository) RelationsTo(ctx context.Context, entryID string) ([]accounting.JournalRelation, error) {
+	rows, err := r.q.ListRelationsTo(ctx, entryID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: ListRelationsTo: %w", err)
+	}
+	return relationsFromRows(rows), nil
+}
+
+func relationFromRow(row pgstore.JournalRelation) accounting.JournalRelation {
+	return accounting.JournalRelation{
+		FromEntry: row.FromEntry,
+		ToEntry:   row.ToEntry,
+		Type:      accounting.JournalRelationType(row.Type),
+		Reason:    accounting.RelationReason(row.Reason),
+		Amount:    row.Amount,
+		Note:      row.Note,
+	}
+}
+
+func relationsFromRows(rows []pgstore.JournalRelation) []accounting.JournalRelation {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]accounting.JournalRelation, len(rows))
+	for i, row := range rows {
+		out[i] = relationFromRow(row)
+	}
+	return out
 }
 
 func (r *accountingRepository) LastSequence(ctx context.Context, subject string) (uint64, error) {

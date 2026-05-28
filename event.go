@@ -8,11 +8,14 @@ import (
 // JournalPosted is the domain event emitted after a JournalIntent has been
 // validated and the broker has accepted it. Subject and Sequence are
 // transport-assigned and excluded from JSON; Entry.ID is producer-assigned and
-// carried through the body.
+// carried through the body. Relations carries any JournalRelation rows built
+// alongside the entry (e.g. a reversal's link to its original); Apply writes
+// the entry and all relations in one transaction.
 type JournalPosted struct {
-	Subject  string       `json:"-"`
-	Sequence uint64       `json:"-"`
-	Entry    JournalEntry `json:"entry"`
+	Subject   string            `json:"-"`
+	Sequence  uint64            `json:"-"`
+	Entry     JournalEntry      `json:"entry"`
+	Relations []JournalRelation `json:"relations,omitempty"`
 }
 
 // FormatEntryID formats a per-subject counter into the canonical JournalEntry.ID.

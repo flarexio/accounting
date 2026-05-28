@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/persistence/memory"
@@ -223,6 +224,131 @@ func TestValidator_NilRepo(t *testing.T) {
 	err := accounting.Validator{}.Validate(context.Background(), balancedAWSIntent())
 	if err == nil {
 		t.Fatal("expected error when validator has no repository")
+	}
+}
+
+// reversalSetup posts an original AWS-bill entry into the repo and returns
+// the matching mirror reversal entry and relation; the relation is the
+// golden full-reversal case for ValidateRelation.
+func reversalSetup(t *testing.T) (accounting.LedgerRepository, accounting.JournalEntry, accounting.JournalEntry, accounting.JournalRelation) {
+	t.Helper()
+	repo := awsBillRepo(t)
+	ctx := context.Background()
+
+	posted := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	original := accounting.JournalEntry{
+		ID:          "JE-0001",
+		Date:        accounting.NewDate(2026, 5, 12),
+		PeriodID:    "2026-05",
+		Currency:    "USD",
+		Description: "Original",
+		Lines: []accounting.JournalLine{
+			{AccountCode: "5200", Side: accounting.SideDebit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "hq"}},
+			{AccountCode: "2100", Side: accounting.SideCredit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "hq"}},
+		},
+		PostedAt: posted,
+	}
+	if err := repo.Apply(ctx, accounting.JournalPosted{Subject: "test", Sequence: 1, Entry: original}); err != nil {
+		t.Fatalf("seed original: %v", err)
+	}
+
+	reversal := accounting.JournalEntry{
+		ID:          "JE-0002",
+		Date:        original.Date,
+		PeriodID:    original.PeriodID,
+		Currency:    original.Currency,
+		Description: "Reversal of JE-0001",
+		Lines: []accounting.JournalLine{
+			{AccountCode: "5200", Side: accounting.SideCredit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "hq"}},
+			{AccountCode: "2100", Side: accounting.SideDebit, Amount: 10000, Dimensions: accounting.Dimensions{BranchID: "hq"}},
+		},
+		PostedAt: posted.Add(time.Hour),
+	}
+	rel := accounting.JournalRelation{
+		FromEntry: reversal.ID,
+		ToEntry:   original.ID,
+		Type:      accounting.RelationReverses,
+		Reason:    accounting.ReasonDuplicate,
+	}
+	return repo, original, reversal, rel
+}
+
+func TestValidator_ValidateRelation_AcceptsFullReversal(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	if err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal); err != nil {
+		t.Fatalf("expected the mirror reversal to validate, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsUnknownType(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	rel.Type = "frobnicate"
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "known relation kind") {
+		t.Fatalf("expected unknown-type error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsSelfReference(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	rel.ToEntry = rel.FromEntry
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "differ from to_entry") {
+		t.Fatalf("expected self-reference error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsMissingTo(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	rel.ToEntry = ""
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "to_entry is required") {
+		t.Fatalf("expected missing-to error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsUnknownTo(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	rel.ToEntry = "JE-9999"
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "is not in the ledger") {
+		t.Fatalf("expected unknown-to error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsPartialAmount(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	rel.Amount = 100
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "partial relations") {
+		t.Fatalf("expected partial-not-supported error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsSideNotFlipped(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	reversal.Lines[0].Side = accounting.SideDebit // copy the original side, no flip
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "side not flipped") {
+		t.Fatalf("expected mirror side error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsAmountMismatch(t *testing.T) {
+	repo, _, reversal, rel := reversalSetup(t)
+	reversal.Lines[0].Amount = 9999
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "amount mismatch") {
+		t.Fatalf("expected mirror amount error, got %v", err)
+	}
+}
+
+func TestValidator_ValidateRelation_RejectsCausalityViolation(t *testing.T) {
+	repo, original, reversal, rel := reversalSetup(t)
+	reversal.PostedAt = original.PostedAt.Add(-time.Hour) // posted before original
+	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
+	if err == nil || !strings.Contains(err.Error(), "precedes to_entry") {
+		t.Fatalf("expected causality error, got %v", err)
 	}
 }
 

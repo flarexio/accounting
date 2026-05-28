@@ -303,7 +303,7 @@ func (m *model) appendReversePreview(intent bookkeeping.ReverseIntent) {
 	if err != nil || !found {
 		return
 	}
-	m.appendLine(line{kind: linePreview, text: renderReversePreview(entry, intent.Reason, m.accountNameResolver())})
+	m.appendLine(line{kind: linePreview, text: renderReversePreview(entry, intent.Note, m.accountNameResolver())})
 }
 
 func (m model) accountNameResolver() accountNameFn {

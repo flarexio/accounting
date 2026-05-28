@@ -179,11 +179,11 @@ func sampleAccounts() map[string]accounting.Account {
 	return out
 }
 
-func reverseJournalEventContent(t *testing.T, entryID, reason string) string {
+func reverseJournalEventContent(t *testing.T, entryID, note string) string {
 	t.Helper()
 	raw, err := json.Marshal(bookkeeping.Intent{
 		Kind:    bookkeeping.IntentReverseJournal,
-		Reverse: &bookkeeping.ReverseIntent{EntryID: entryID, Reason: reason},
+		Reverse: &bookkeeping.ReverseIntent{EntryID: entryID, Reason: accounting.ReasonOther, Note: note},
 	})
 	if err != nil {
 		t.Fatalf("marshal intent: %v", err)
