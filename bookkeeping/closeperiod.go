@@ -41,7 +41,7 @@ type ClosePeriod struct {
 // company is configured with a Retained Earnings account. It runs no side
 // effect. An already-closed period is treated as a valid no-op.
 func (uc ClosePeriod) Validate(ctx context.Context, intent ClosePeriodIntent) error {
-	_, _, err := uc.prepare(ctx, intent)
+	_, _, _, err := uc.prepare(ctx, intent)
 	return err
 }
 
@@ -51,7 +51,7 @@ func (uc ClosePeriod) Validate(ctx context.Context, intent ClosePeriodIntent) er
 // must use Handle. Returns an already-closed result with no entries when the
 // period was already closed.
 func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (ClosePeriodResult, error) {
-	plans, alreadyClosed, err := uc.prepare(ctx, intent)
+	period, plans, alreadyClosed, err := uc.prepare(ctx, intent)
 	if err != nil {
 		return ClosePeriodResult{}, err
 	}
@@ -108,9 +108,8 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 		posted = append(posted, dispatched.Entry)
 	}
 
-	closedPeriod := plans[0].period
-	closedPeriod.Status = accounting.PeriodClosed
-	if err := uc.Repo.PutPeriod(ctx, closedPeriod); err != nil {
+	period.Status = accounting.PeriodClosed
+	if err := uc.Repo.PutPeriod(ctx, period); err != nil {
 		return ClosePeriodResult{}, fmt.Errorf("bookkeeping: close period %q: %w", intent.PeriodID, err)
 	}
 
@@ -126,42 +125,41 @@ func (uc ClosePeriod) Handle(ctx context.Context, intent ClosePeriodIntent) (Clo
 }
 
 type closingPlan struct {
-	period  accounting.Period
 	intent  accounting.JournalIntent
 	sources []string
 }
 
-func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) ([]closingPlan, bool, error) {
+func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (accounting.Period, []closingPlan, bool, error) {
 	if uc.Repo == nil {
-		return nil, false, errors.New("bookkeeping: close period has no repository")
+		return accounting.Period{}, nil, false, errors.New("bookkeeping: close period has no repository")
 	}
 	if uc.Publisher == nil {
-		return nil, false, errors.New("bookkeeping: close period has no event publisher")
+		return accounting.Period{}, nil, false, errors.New("bookkeeping: close period has no event publisher")
 	}
 	if intent.PeriodID == "" {
-		return nil, false, errors.New("bookkeeping: close period needs a period_id")
+		return accounting.Period{}, nil, false, errors.New("bookkeeping: close period needs a period_id")
 	}
 
 	period, ok, err := uc.Repo.Period(ctx, intent.PeriodID)
 	if err != nil {
-		return nil, false, fmt.Errorf("bookkeeping: load period %q: %w", intent.PeriodID, err)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load period %q: %w", intent.PeriodID, err)
 	}
 	if !ok {
-		return nil, false, fmt.Errorf("bookkeeping: period %q does not exist", intent.PeriodID)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q does not exist", intent.PeriodID)
 	}
 	if period.Status == accounting.PeriodClosed {
-		return nil, true, nil
+		return period, nil, true, nil
 	}
 
 	company, ok, err := uc.Repo.Company(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("bookkeeping: load company: %w", err)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load company: %w", err)
 	}
 	if !ok {
-		return nil, false, errors.New("bookkeeping: ledger has no company set")
+		return accounting.Period{}, nil, false, errors.New("bookkeeping: ledger has no company set")
 	}
 	if company.RetainedEarningsCode == "" {
-		return nil, false, errors.New("bookkeeping: company has no retained_earnings_code configured")
+		return accounting.Period{}, nil, false, errors.New("bookkeeping: company has no retained_earnings_code configured")
 	}
 
 	clock := uc.Clock
@@ -170,13 +168,13 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) ([]
 	}
 	today := accounting.DateOf(clock(), company.Location())
 	if !today.After(period.End) {
-		return nil, false, fmt.Errorf("bookkeeping: period %q ends %s in %s; cannot close before %s",
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q ends %s in %s; cannot close before %s",
 			period.ID, period.End, company.TimeZone, period.End)
 	}
 
 	accounts, err := uc.Repo.Accounts(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("bookkeeping: load accounts: %w", err)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load accounts: %w", err)
 	}
 	accountType := make(map[string]accounting.AccountType, len(accounts))
 	for _, a := range accounts {
@@ -185,14 +183,14 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) ([]
 	switch accountType[company.RetainedEarningsCode] {
 	case accounting.AccountEquity:
 	case "":
-		return nil, false, fmt.Errorf("bookkeeping: retained_earnings_code %q is not in the chart of accounts", company.RetainedEarningsCode)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: retained_earnings_code %q is not in the chart of accounts", company.RetainedEarningsCode)
 	default:
-		return nil, false, fmt.Errorf("bookkeeping: retained_earnings_code %q must be an equity account", company.RetainedEarningsCode)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: retained_earnings_code %q must be an equity account", company.RetainedEarningsCode)
 	}
 
 	entries, err := uc.Repo.Entries(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("bookkeeping: load entries: %w", err)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load entries: %w", err)
 	}
 
 	type accountBalance struct {
@@ -242,7 +240,7 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) ([]
 	}
 
 	if len(branches) == 0 {
-		return nil, false, fmt.Errorf("bookkeeping: period %q has no revenue or expense activity to close", intent.PeriodID)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q has no revenue or expense activity to close", intent.PeriodID)
 	}
 
 	branchIDs := make([]string, 0, len(branches))
@@ -321,16 +319,16 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) ([]
 			Lines:       lines,
 		}
 		if err := validator.Validate(ctx, closeIntent); err != nil {
-			return nil, false, fmt.Errorf("bookkeeping: close period %q branch %q: %w", period.ID, branchID, err)
+			return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: close period %q branch %q: %w", period.ID, branchID, err)
 		}
-		plans = append(plans, closingPlan{period: period, intent: closeIntent, sources: sources})
+		plans = append(plans, closingPlan{intent: closeIntent, sources: sources})
 	}
 
 	if len(plans) == 0 {
-		return nil, false, fmt.Errorf("bookkeeping: period %q nets to zero across every branch; nothing to close", intent.PeriodID)
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q nets to zero across every branch; nothing to close", intent.PeriodID)
 	}
 
-	return plans, false, nil
+	return period, plans, false, nil
 }
 
 // inferCurrency picks the currency of the first entry in the period; closing
