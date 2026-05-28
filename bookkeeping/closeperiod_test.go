@@ -210,6 +210,54 @@ func TestClosePeriod_IdempotentWhenAlreadyClosed(t *testing.T) {
 	}
 }
 
+func TestClosePeriod_ResumesAfterCrashBetweenPostAndFlip(t *testing.T) {
+	ctx := context.Background()
+	repo, bus := closingLedger(t)
+	postClosingActivity(t, repo, bus)
+
+	// Simulate the post-then-crash window: run a full close, then revert the
+	// period back to open. The closing entries are still in the projection,
+	// but Period.Status was never flipped. A retry should see that the
+	// remaining rev/exp balances all net to zero, post no new entries, and
+	// just flip the period.
+	uc := bookkeeping.ClosePeriod{Repo: repo, Publisher: bus, Clock: closingClock}
+	if _, err := uc.Handle(ctx, bookkeeping.ClosePeriodIntent{PeriodID: "2026-05"}); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	entriesAfterFirst, _ := repo.Entries(ctx)
+
+	openPeriod := accounting.Period{
+		ID:     "2026-05",
+		Start:  accounting.NewDate(2026, 5, 1),
+		End:    accounting.NewDate(2026, 5, 31),
+		Status: accounting.PeriodOpen,
+	}
+	if err := repo.PutPeriod(ctx, openPeriod); err != nil {
+		t.Fatalf("revert period to open: %v", err)
+	}
+
+	result, err := uc.Handle(ctx, bookkeeping.ClosePeriodIntent{PeriodID: "2026-05"})
+	if err != nil {
+		t.Fatalf("resume close: %v", err)
+	}
+	if !result.AlreadyClosed {
+		t.Fatalf("expected already_closed when closing entries are already in place, got %+v", result)
+	}
+	if len(result.Entries) != 0 {
+		t.Fatalf("expected no new entries on resume, got %d", len(result.Entries))
+	}
+
+	entriesAfterResume, _ := repo.Entries(ctx)
+	if len(entriesAfterResume) != len(entriesAfterFirst) {
+		t.Fatalf("expected no new entries posted on resume, before=%d after=%d", len(entriesAfterFirst), len(entriesAfterResume))
+	}
+
+	period, _, _ := repo.Period(ctx, "2026-05")
+	if period.Status != accounting.PeriodClosed {
+		t.Fatalf("expected resume to flip the period to closed, got %q", period.Status)
+	}
+}
+
 func TestClosePeriod_RefusesPeriodNotYetEnded(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := closingLedger(t)
@@ -381,5 +429,13 @@ func TestClosePeriod_MultipleBranches(t *testing.T) {
 	}
 	if !branches["main"] || !branches["annex"] {
 		t.Fatalf("expected closing entries for both branches, got %v", branches)
+	}
+	// Pre-built IDs must be distinct and non-empty -- prepare assigns them
+	// off a single lastSeq read before any publish runs.
+	if result.Entries[0].ID == "" || result.Entries[1].ID == "" {
+		t.Fatalf("expected non-empty entry IDs, got %q and %q", result.Entries[0].ID, result.Entries[1].ID)
+	}
+	if result.Entries[0].ID == result.Entries[1].ID {
+		t.Fatalf("expected distinct entry IDs across branches, got %q twice", result.Entries[0].ID)
 	}
 }
