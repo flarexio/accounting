@@ -45,17 +45,15 @@ func closingScenario() accounting.Scenario {
 func wireClosingBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBus {
 	t.Helper()
 	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectJournalPosted, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
+			return repo.Apply(ctx, evt.(accounting.JournalPosted))
+		})).
+		On(accounting.SubjectPeriodClosure, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
+			return repo.ApplyPeriodClosure(ctx, evt.(accounting.PeriodClosure))
+		}))
+	if err := bus.Subscribe(router); err != nil {
 		t.Fatalf("subscribe: %v", err)
-	}
-	closure := bookkeeping.PeriodClosureHandlerFunc(func(ctx context.Context, evt accounting.PeriodClosure) error {
-		return repo.ApplyPeriodClosure(ctx, evt)
-	})
-	if err := bus.SubscribePeriodClosure(closure); err != nil {
-		t.Fatalf("subscribe closure: %v", err)
 	}
 	return bus
 }

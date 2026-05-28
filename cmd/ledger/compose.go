@@ -52,26 +52,32 @@ func buildRepository(ctx context.Context, persist config.Persistence, embed conf
 	}
 }
 
-// buildMessaging opens the EventBus and subscribes both the JournalPosted and
-// PeriodClosure handlers that apply events to repo.
+// buildMessaging opens the EventBus and registers the projection handlers via
+// a single Router. The router is the only subscription point: every supported
+// subject has its handler registered before Subscribe is called.
 func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeping.EventBus, error) {
 	bus, err := openBus(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectJournalPosted, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
+			je, ok := evt.(accounting.JournalPosted)
+			if !ok {
+				return fmt.Errorf("book-run: subject %q delivered %T, want JournalPosted", evt.EventSubject(), evt)
+			}
+			return repo.Apply(ctx, je)
+		})).
+		On(accounting.SubjectPeriodClosure, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
+			pc, ok := evt.(accounting.PeriodClosure)
+			if !ok {
+				return fmt.Errorf("book-run: subject %q delivered %T, want PeriodClosure", evt.EventSubject(), evt)
+			}
+			return repo.ApplyPeriodClosure(ctx, pc)
+		}))
+	if err := bus.Subscribe(router); err != nil {
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)
-	}
-	applyClosure := bookkeeping.PeriodClosureHandlerFunc(func(ctx context.Context, evt accounting.PeriodClosure) error {
-		return repo.ApplyPeriodClosure(ctx, evt)
-	})
-	if err := bus.SubscribePeriodClosure(applyClosure); err != nil {
-		_ = bus.Close()
-		return nil, fmt.Errorf("book-run: subscribe closure: %w", err)
 	}
 	return bus, nil
 }
