@@ -94,7 +94,7 @@ func (q *Queries) GetPeriod(ctx context.Context, id string) (Period, error) {
 }
 
 const getRelation = `-- name: GetRelation :one
-SELECT from_entry, to_entry, type, reason, amount, note
+SELECT from_entry, to_entry, type, reason, note
 FROM journal_relations
 WHERE from_entry = $1 AND to_entry = $2
 `
@@ -112,7 +112,6 @@ func (q *Queries) GetRelation(ctx context.Context, arg GetRelationParams) (Journ
 		&i.ToEntry,
 		&i.Type,
 		&i.Reason,
-		&i.Amount,
 		&i.Note,
 	)
 	return i, err
@@ -189,8 +188,8 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) error {
 
 const insertRelation = `-- name: InsertRelation :exec
 INSERT INTO journal_relations (
-    from_entry, to_entry, type, reason, amount, note
-) VALUES ($1, $2, $3, $4, $5, $6)
+    from_entry, to_entry, type, reason, note
+) VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (from_entry, to_entry) DO NOTHING
 `
 
@@ -199,7 +198,6 @@ type InsertRelationParams struct {
 	ToEntry   string
 	Type      string
 	Reason    string
-	Amount    int64
 	Note      string
 }
 
@@ -212,7 +210,6 @@ func (q *Queries) InsertRelation(ctx context.Context, arg InsertRelationParams) 
 		arg.ToEntry,
 		arg.Type,
 		arg.Reason,
-		arg.Amount,
 		arg.Note,
 	)
 	return err
@@ -450,7 +447,7 @@ func (q *Queries) ListPeriods(ctx context.Context) ([]Period, error) {
 }
 
 const listRelationsFrom = `-- name: ListRelationsFrom :many
-SELECT from_entry, to_entry, type, reason, amount, note
+SELECT from_entry, to_entry, type, reason, note
 FROM journal_relations
 WHERE from_entry = $1
 ORDER BY to_entry
@@ -470,7 +467,6 @@ func (q *Queries) ListRelationsFrom(ctx context.Context, fromEntry string) ([]Jo
 			&i.ToEntry,
 			&i.Type,
 			&i.Reason,
-			&i.Amount,
 			&i.Note,
 		); err != nil {
 			return nil, err
@@ -484,7 +480,7 @@ func (q *Queries) ListRelationsFrom(ctx context.Context, fromEntry string) ([]Jo
 }
 
 const listRelationsTo = `-- name: ListRelationsTo :many
-SELECT from_entry, to_entry, type, reason, amount, note
+SELECT from_entry, to_entry, type, reason, note
 FROM journal_relations
 WHERE to_entry = $1
 ORDER BY from_entry
@@ -504,7 +500,6 @@ func (q *Queries) ListRelationsTo(ctx context.Context, toEntry string) ([]Journa
 			&i.ToEntry,
 			&i.Type,
 			&i.Reason,
-			&i.Amount,
 			&i.Note,
 		); err != nil {
 			return nil, err

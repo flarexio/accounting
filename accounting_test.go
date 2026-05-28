@@ -316,15 +316,6 @@ func TestValidator_ValidateRelation_RejectsUnknownTo(t *testing.T) {
 	}
 }
 
-func TestValidator_ValidateRelation_RejectsPartialAmount(t *testing.T) {
-	repo, _, reversal, rel := reversalSetup(t)
-	rel.Amount = 100
-	err := (accounting.Validator{Repo: repo}).ValidateRelation(context.Background(), rel, reversal)
-	if err == nil || !strings.Contains(err.Error(), "partial relations") {
-		t.Fatalf("expected partial-not-supported error, got %v", err)
-	}
-}
-
 func TestValidator_ValidateRelation_RejectsSideNotFlipped(t *testing.T) {
 	repo, _, reversal, rel := reversalSetup(t)
 	reversal.Lines[0].Side = accounting.SideDebit // copy the original side, no flip
