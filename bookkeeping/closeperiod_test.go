@@ -39,12 +39,11 @@ func closingScenario() accounting.Scenario {
 	}
 }
 
-func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
+// wireClosingBus wires an inproc bus to the JournalPosted and PeriodClosure
+// projection handlers, matching the production composition in
+// cmd/ledger/compose.go.
+func wireClosingBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBus {
 	t.Helper()
-	repo := memory.NewAccountingRepository()
-	if err := closingScenario().Seed(context.Background(), repo); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	bus := inproc.NewAccountingBus()
 	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
@@ -52,7 +51,22 @@ func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.Event
 	if err := bus.Subscribe(apply); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
-	return repo, bus
+	closure := bookkeeping.PeriodClosureHandlerFunc(func(ctx context.Context, evt accounting.PeriodClosure) error {
+		return repo.ApplyPeriodClosure(ctx, evt)
+	})
+	if err := bus.SubscribePeriodClosure(closure); err != nil {
+		t.Fatalf("subscribe closure: %v", err)
+	}
+	return bus
+}
+
+func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
+	t.Helper()
+	repo := memory.NewAccountingRepository()
+	if err := closingScenario().Seed(context.Background(), repo); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	return repo, wireClosingBus(t, repo)
 }
 
 func postClosingActivity(t *testing.T, repo accounting.LedgerRepository, bus bookkeeping.EventBus) []accounting.JournalEntry {
@@ -287,13 +301,7 @@ func TestClosePeriod_RefusesStillOpenInCompanyTimezone(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 	postClosingActivity(t, repo, bus)
 
 	// 2026-05-31 23:30 UTC is already 2026-06-01 in Asia/Taipei (UTC+8) -- but
@@ -356,13 +364,7 @@ func TestClosePeriod_RefusesMissingRetainedEarningsCode(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 	postClosingActivity(t, repo, bus)
 
 	uc := bookkeeping.ClosePeriod{Repo: repo, Publisher: bus, Clock: closingClock}
@@ -379,13 +381,7 @@ func TestClosePeriod_MultipleBranches(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 
 	post := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	if _, err := post.Handle(ctx, accounting.JournalIntent{

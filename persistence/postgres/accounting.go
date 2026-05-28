@@ -404,6 +404,46 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 	return nil
 }
 
+// ApplyPeriodClosure flips the named period to closed and advances
+// LastSequence for evt.Subject in one transaction so a concurrent reader
+// cannot observe the period flip without its sequence. An unknown period id
+// is an error so an event for a never-seeded period does not silently
+// disappear.
+func (r *accountingRepository) ApplyPeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("postgres: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := r.q.WithTx(tx)
+
+	rows, err := q.UpdatePeriodStatus(ctx, pgstore.UpdatePeriodStatusParams{
+		ID:     evt.Period.ID,
+		Status: string(accounting.PeriodClosed),
+	})
+	if err != nil {
+		return fmt.Errorf("postgres: UpdatePeriodStatus: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("postgres: ApplyPeriodClosure: period %q does not exist", evt.Period.ID)
+	}
+
+	if evt.Subject != "" {
+		if err := q.UpsertLastSequence(ctx, pgstore.UpsertLastSequenceParams{
+			Subject:      evt.Subject,
+			LastSequence: int64(evt.Sequence),
+		}); err != nil {
+			return fmt.Errorf("postgres: UpsertLastSequence: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("postgres: commit: %w", err)
+	}
+	return nil
+}
+
 func (r *accountingRepository) Relation(ctx context.Context, fromEntry, toEntry string) (accounting.JournalRelation, bool, error) {
 	row, err := r.q.GetRelation(ctx, pgstore.GetRelationParams{FromEntry: fromEntry, ToEntry: toEntry})
 	if err != nil {

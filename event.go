@@ -18,6 +18,18 @@ type JournalPosted struct {
 	Relations []JournalRelation `json:"relations,omitempty"`
 }
 
+// PeriodClosure is the domain event emitted by ClosePeriod after every
+// closing entry for the period has been published. The subscribed
+// ApplyPeriodClosure handler is the only writer that flips Period.Status to
+// closed in the projection, so this is the event-sourced counterpart of
+// JournalPosted for period state transitions. Subject and Sequence are
+// transport-assigned.
+type PeriodClosure struct {
+	Subject  string `json:"-"`
+	Sequence uint64 `json:"-"`
+	Period   Period `json:"period"`
+}
+
 // FormatEntryID formats a per-subject counter into the canonical JournalEntry.ID.
 func FormatEntryID(seq uint64) string {
 	return fmt.Sprintf("JE-%04d", seq)

@@ -45,12 +45,13 @@ func (uc ClosePeriod) Validate(ctx context.Context, intent ClosePeriodIntent) er
 	return err
 }
 
-// Execute publishes the pre-built closing events, then flips Period.Status to
-// closed. It does not re-validate; unvalidated callers must use Handle. Returns
-// an already-closed result with no entries when the period was already closed
-// or when the projection shows rev/exp accounts already net to zero (i.e. a
-// previous Execute posted the closing entries but crashed before flipping the
-// period -- a retry just flips the period).
+// Execute publishes the pre-built closing entries, then publishes a
+// PeriodClosure event to flip Period.Status. It does not re-validate;
+// unvalidated callers must use Handle. Returns an already-closed result with
+// no entries when the period was already closed or when the projection shows
+// rev/exp accounts already net to zero (i.e. a previous Execute posted the
+// closing entries but crashed before publishing the closure -- the retry just
+// re-publishes the closure).
 func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (ClosePeriodResult, error) {
 	period, plans, alreadyClosed, err := uc.prepare(ctx, intent)
 	if err != nil {
@@ -70,9 +71,23 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 	}
 
 	if period.Status != accounting.PeriodClosed {
-		period.Status = accounting.PeriodClosed
-		if err := uc.Repo.PutPeriod(ctx, period); err != nil {
-			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: close period %q: %w", intent.PeriodID, err)
+		closurePub, ok := uc.Publisher.(PeriodClosurePublisher)
+		if !ok {
+			return ClosePeriodResult{}, errors.New("bookkeeping: publisher does not support period closure events")
+		}
+		closedPeriod := period
+		closedPeriod.Status = accounting.PeriodClosed
+		lastClosureSeq, err := uc.Repo.LastSequence(ctx, SubjectPeriodClosure)
+		if err != nil {
+			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: read period-closure sequence: %w", err)
+		}
+		if _, err := closurePub.PublishPeriodClosure(ctx, accounting.PeriodClosure{
+			Period: closedPeriod,
+		}, accounting.ExpectedSequence{
+			Subject: SubjectPeriodClosure,
+			LastSeq: lastClosureSeq,
+		}); err != nil {
+			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish period closure: %w", err)
 		}
 	}
 

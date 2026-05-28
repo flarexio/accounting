@@ -35,6 +35,7 @@ type Querier interface {
 	ListPeriods(ctx context.Context) ([]Period, error)
 	ListRelationsFrom(ctx context.Context, fromEntry string) ([]JournalRelation, error)
 	ListRelationsTo(ctx context.Context, toEntry string) ([]JournalRelation, error)
+	UpdatePeriodStatus(ctx context.Context, arg UpdatePeriodStatusParams) (int64, error)
 	UpsertAccount(ctx context.Context, arg UpsertAccountParams) error
 	UpsertBranch(ctx context.Context, arg UpsertBranchParams) error
 	UpsertLastSequence(ctx context.Context, arg UpsertLastSequenceParams) error
