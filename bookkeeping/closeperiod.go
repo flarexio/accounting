@@ -63,10 +63,6 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 	if subject == "" {
 		subject = SubjectLedger
 	}
-	clock := uc.Clock
-	if clock == nil {
-		clock = func() time.Time { return time.Now().UTC() }
-	}
 
 	posted := make([]accounting.JournalEntry, 0, len(plans))
 	for _, plan := range plans {
@@ -82,7 +78,7 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 			Currency:    plan.intent.Currency,
 			Description: plan.intent.Description,
 			Lines:       plan.intent.Lines,
-			PostedAt:    clock(),
+			PostedAt:    uc.now(),
 		}
 
 		relations := make([]accounting.JournalRelation, len(plan.sources))
@@ -124,6 +120,14 @@ func (uc ClosePeriod) Handle(ctx context.Context, intent ClosePeriodIntent) (Clo
 	return uc.Execute(ctx, intent)
 }
 
+// now resolves the clock; nil Clock falls back to time.Now().UTC().
+func (uc ClosePeriod) now() time.Time {
+	if uc.Clock == nil {
+		return time.Now().UTC()
+	}
+	return uc.Clock()
+}
+
 type closingPlan struct {
 	intent  accounting.JournalIntent
 	sources []string
@@ -162,11 +166,7 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		return accounting.Period{}, nil, false, errors.New("bookkeeping: company has no retained_earnings_code configured")
 	}
 
-	clock := uc.Clock
-	if clock == nil {
-		clock = func() time.Time { return time.Now().UTC() }
-	}
-	today := accounting.DateOf(clock(), company.Location())
+	today := accounting.DateOf(uc.now(), company.Location())
 	if !today.After(period.End) {
 		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q ends %s in %s; cannot close before %s",
 			period.ID, period.End, company.TimeZone, period.End)

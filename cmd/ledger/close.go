@@ -23,9 +23,9 @@ func newCloseCommand(stdout io.Writer) *cli.Command {
 			"JournalRelation rows, then flips the period to closed. A second invocation\n" +
 			"against an already-closed period is a no-op.\n" +
 			"\n" +
-			"Intended to be invoked by an external scheduler (cron, k8s CronJob).\n" +
-			"Prints a JSON report of the posted entries; exits non-zero on validation\n" +
-			"or publish failure.",
+			"Intended to be invoked by an external scheduler (a crontab entry or\n" +
+			"equivalent). Prints a JSON report of the posted entries; exits non-zero\n" +
+			"on validation or publish failure.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "period",
