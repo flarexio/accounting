@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -15,40 +16,34 @@ import (
 // over the accounting namespace, so future subjects need no stream reconfig.
 const streamSubjectAccounting = "accounting.>"
 
-// closureConsumerSuffix is appended to cfg.Consumer to derive a second durable
-// consumer dedicated to the PeriodClosure subject so the two event streams are
-// tracked and acked independently.
-const closureConsumerSuffix = "-period-closure"
-
 // accountingBus is the NATS JetStream backed bookkeeping.EventBus for the
-// accounting domain. It owns one durable consumer per event-type subject so
-// JournalPosted and PeriodClosure are acked independently while still sharing
-// the same JetStream stream. Broker "wrong last sequence" rejections are
-// translated to accounting.ErrConcurrentUpdate so the inproc and NATS
-// transports surface the same sentinel.
+// accounting domain. One durable consumer fans every accounting subject
+// through a single ack cursor so the global publish order between subjects is
+// preserved; the consume loop dispatches each message to the handler whose
+// subject it carries. Broker "wrong last sequence" rejections are translated
+// to accounting.ErrConcurrentUpdate so the inproc and NATS transports surface
+// the same sentinel.
 type accountingBus struct {
-	journal *bus
-	closure *bus
+	bus *bus
+
+	mu             sync.Mutex
+	started        bool
+	journalHandler bookkeeping.EventHandler
+	closureHandler bookkeeping.PeriodClosureHandler
 }
 
-// NewAccountingBus opens NATS and returns a bookkeeping.EventBus that
-// publishes JournalPosted on bookkeeping.SubjectLedger and PeriodClosure on
-// bookkeeping.SubjectPeriodClosure, each via its own durable consumer (the
-// PeriodClosure consumer is named cfg.Consumer + "-period-closure"). Close
-// drains both consume loops and releases the connection.
+// NewAccountingBus opens NATS and returns a bookkeeping.EventBus configured
+// for the accounting JournalPosted and PeriodClosure subjects. Close drains
+// the consume loop and releases the connection.
 func NewAccountingBus(ctx context.Context, cfg Config) (bookkeeping.EventBus, error) {
-	journal, err := connect(ctx, cfg, bookkeeping.SubjectLedger, streamSubjectAccounting)
+	b, err := connect(ctx, cfg, []string{
+		bookkeeping.SubjectLedger,
+		bookkeeping.SubjectPeriodClosure,
+	}, streamSubjectAccounting)
 	if err != nil {
 		return nil, err
 	}
-	closureCfg := cfg
-	closureCfg.Consumer = cfg.Consumer + closureConsumerSuffix
-	closure, err := connect(ctx, closureCfg, bookkeeping.SubjectPeriodClosure, streamSubjectAccounting)
-	if err != nil {
-		_ = journal.close()
-		return nil, err
-	}
-	return &accountingBus{journal: journal, closure: closure}, nil
+	return &accountingBus{bus: b}, nil
 }
 
 func (a *accountingBus) Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error) {
@@ -60,14 +55,14 @@ func (a *accountingBus) Publish(ctx context.Context, evt accounting.JournalPoste
 	if expect.Subject != "" {
 		opts = append(opts, jetstream.WithExpectLastSequencePerSubject(expect.LastSeq))
 	}
-	seq, err := a.journal.publishRaw(ctx, body, opts...)
+	seq, err := a.bus.publishRaw(ctx, bookkeeping.SubjectLedger, body, opts...)
 	if err != nil {
 		if isWrongLastSequence(err) {
 			return accounting.JournalPosted{}, accounting.ErrConcurrentUpdate
 		}
 		return accounting.JournalPosted{}, fmt.Errorf("nats: publish: %w", err)
 	}
-	return stampAccountingPubAck(evt, a.journal.subject, seq), nil
+	return stampAccountingPubAck(evt, bookkeeping.SubjectLedger, seq), nil
 }
 
 func (a *accountingBus) PublishPeriodClosure(ctx context.Context, evt accounting.PeriodClosure, expect accounting.ExpectedSequence) (accounting.PeriodClosure, error) {
@@ -79,22 +74,65 @@ func (a *accountingBus) PublishPeriodClosure(ctx context.Context, evt accounting
 	if expect.Subject != "" {
 		opts = append(opts, jetstream.WithExpectLastSequencePerSubject(expect.LastSeq))
 	}
-	seq, err := a.closure.publishRaw(ctx, body, opts...)
+	seq, err := a.bus.publishRaw(ctx, bookkeeping.SubjectPeriodClosure, body, opts...)
 	if err != nil {
 		if isWrongLastSequence(err) {
 			return accounting.PeriodClosure{}, accounting.ErrConcurrentUpdate
 		}
 		return accounting.PeriodClosure{}, fmt.Errorf("nats: publish: %w", err)
 	}
-	return stampClosurePubAck(evt, a.closure.subject, seq), nil
+	return stampClosurePubAck(evt, bookkeeping.SubjectPeriodClosure, seq), nil
 }
 
-// Subscribe starts the consume loop. A successful handler Acks; a decode or
-// handler error Naks for redelivery.
+// Subscribe registers handler to receive JournalPosted messages; the consume
+// loop starts on the first registration so a single subscriber is enough to
+// drain the stream.
 func (a *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
-	return a.journal.subscribeMessages(func(msg jetstream.Msg) {
-		ctx, cancel := context.WithTimeout(context.Background(), a.journal.ackWait)
-		defer cancel()
+	a.mu.Lock()
+	a.journalHandler = handler
+	a.mu.Unlock()
+	return a.startOnce()
+}
+
+// SubscribePeriodClosure registers handler to receive PeriodClosure messages.
+func (a *accountingBus) SubscribePeriodClosure(handler bookkeeping.PeriodClosureHandler) error {
+	a.mu.Lock()
+	a.closureHandler = handler
+	a.mu.Unlock()
+	return a.startOnce()
+}
+
+// startOnce starts the single consume loop. Subsequent calls are no-ops; the
+// loop reads journalHandler / closureHandler under the mutex on every message
+// so registrations made after the loop starts still take effect.
+func (a *accountingBus) startOnce() error {
+	a.mu.Lock()
+	if a.started {
+		a.mu.Unlock()
+		return nil
+	}
+	a.started = true
+	a.mu.Unlock()
+	return a.bus.subscribeMessages(a.dispatch)
+}
+
+// dispatch routes a JetStream message to the handler registered for its
+// subject. A subject without a handler is naked so it redelivers once a
+// handler registers; a decode or handler error is also naked so the broker
+// retries after AckWait.
+func (a *accountingBus) dispatch(msg jetstream.Msg) {
+	ctx, cancel := context.WithTimeout(context.Background(), a.bus.ackWait)
+	defer cancel()
+
+	switch msg.Subject() {
+	case bookkeeping.SubjectLedger:
+		a.mu.Lock()
+		handler := a.journalHandler
+		a.mu.Unlock()
+		if handler == nil {
+			_ = msg.Nak()
+			return
+		}
 		evt, err := decodeAccountingMsg(msg)
 		if err != nil {
 			_ = msg.Nak()
@@ -105,13 +143,14 @@ func (a *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 			return
 		}
 		_ = msg.Ack()
-	})
-}
-
-func (a *accountingBus) SubscribePeriodClosure(handler bookkeeping.PeriodClosureHandler) error {
-	return a.closure.subscribeMessages(func(msg jetstream.Msg) {
-		ctx, cancel := context.WithTimeout(context.Background(), a.closure.ackWait)
-		defer cancel()
+	case bookkeeping.SubjectPeriodClosure:
+		a.mu.Lock()
+		handler := a.closureHandler
+		a.mu.Unlock()
+		if handler == nil {
+			_ = msg.Nak()
+			return
+		}
 		evt, err := decodeClosureMsg(msg)
 		if err != nil {
 			_ = msg.Nak()
@@ -122,16 +161,16 @@ func (a *accountingBus) SubscribePeriodClosure(handler bookkeeping.PeriodClosure
 			return
 		}
 		_ = msg.Ack()
-	})
+	default:
+		// Unknown subject -- ack to avoid an infinite redelivery storm; the
+		// stream's wildcard filter should never deliver something we did not
+		// register a subject for, but be defensive.
+		_ = msg.Ack()
+	}
 }
 
 func (a *accountingBus) Close() error {
-	closeErr := a.closure.close()
-	journalErr := a.journal.close()
-	if journalErr != nil {
-		return journalErr
-	}
-	return closeErr
+	return a.bus.close()
 }
 
 // Subject and Sequence are excluded from JSON because the transport, not the
@@ -197,3 +236,4 @@ func decodeClosureMsg(msg jetstream.Msg) (accounting.PeriodClosure, error) {
 	}
 	return decodeClosureEvent(msg.Data(), msg.Subject(), meta.Sequence.Stream)
 }
+
