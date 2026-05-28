@@ -66,6 +66,8 @@ ledger seed seed/taiwan_ledger.yaml
 ledger book-run \
   --request "台北總公司以銀行存款支付中華電信辦公室電話費 NT\$3,150，含 5% 進項稅額 NT\$150。"
 
+ledger close --period 2026-05
+
 ledger tui
 ```
 
@@ -73,7 +75,26 @@ ledger tui
 
 `book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI-compatible; set `llm.model` and `llm.api_key` in `config.yaml` (or pass `--model`) and optionally `llm.base_url` for alternative providers.
 
+`close` closes an accounting period. For each branch with revenue or expense activity in the period it posts one balanced closing entry that drains every contributing account into the company's Retained Earnings account, links the closing entry back to each source entry through `JournalRelation` rows of type `closes`, then flips `Period.Status` to `closed`. Re-invoking against an already-closed period is a no-op. The use case refuses to close before `Period.End` has actually passed in `Company.TimeZone`, and refuses when no revenue or expense activity exists. The seed must set `company.retained_earnings_code` to the equity account the net income gets plugged into; see [`seed/taiwan_ledger.yaml`](seed/taiwan_ledger.yaml) for an example.
+
 `tui` opens the Bubble Tea terminal UI against the seeded ledger; same OpenAI requirement, no arguments.
+
+### Scheduling closings
+
+`ledger close` is rule-driven and meant to be invoked by an external scheduler once a period has ended in the company's timezone. The use case itself is idempotent, so safe retries are part of the design.
+
+Example `crontab` entry that closes the previous calendar month at 02:00 on the first of each month, with stdout/stderr captured to a log:
+
+```cron
+# m h dom mon dow  command
+  0 2  1   *   *   /usr/local/bin/ledger close --period "$(date -d 'yesterday' +\%Y-\%m)" >> /var/log/ledger-close.log 2>&1
+```
+
+A few notes:
+
+- The cron daemon runs in its own timezone (often UTC or the system local zone). `ledger close` reads `Company.TimeZone` from the seeded company and refuses to close until `Period.End` has actually passed in *that* zone — schedule a few hours after midnight in the company's zone to be safe.
+- `Period.ID` is supplied by the cron line (here derived from `date -d 'yesterday'`); `ledger close` does not infer it from the wall clock.
+- The user running cron needs the same `~/.flarex/accounting/config.yaml` as interactive runs. For system-wide scheduling, put the config under that user's home or pass `--work-dir <dir>`.
 
 ## Configuration
 

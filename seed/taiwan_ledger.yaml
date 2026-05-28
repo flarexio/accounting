@@ -5,6 +5,7 @@ company:
   id: dongsheng
   name: 東昇商貿股份有限公司
   timezone: Asia/Taipei
+  retained_earnings_code: "3351"
 
 accounts:
   - { code: "1101", name: 庫存現金, type: asset, active: true }

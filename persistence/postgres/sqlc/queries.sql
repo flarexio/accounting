@@ -61,6 +61,12 @@ SELECT id, sequence, subject, entry_date, period_id, currency, description, post
 FROM journal_entries
 ORDER BY sequence;
 
+-- name: ListEntriesByPeriod :many
+SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+FROM journal_entries
+WHERE period_id = $1
+ORDER BY sequence;
+
 -- name: ListEntryLines :many
 SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
 FROM journal_lines

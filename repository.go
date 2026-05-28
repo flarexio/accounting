@@ -17,6 +17,9 @@ type LedgerRepository interface {
 	Branches(ctx context.Context) ([]Branch, error)
 	Entries(ctx context.Context) ([]JournalEntry, error)
 
+	// EntriesByPeriod returns every posted entry whose PeriodID matches.
+	EntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error)
+
 	// Company returns the single company; >1 row is an error.
 	Company(ctx context.Context) (Company, bool, error)
 
