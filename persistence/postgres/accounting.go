@@ -36,7 +36,7 @@ func NewAccountingRepository(ctx context.Context, dsn string, embedder accountin
 }
 
 func (r *accountingRepository) Company(ctx context.Context) (accounting.Company, bool, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name, timezone FROM companies LIMIT 2`)
+	rows, err := r.pool.Query(ctx, `SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2`)
 	if err != nil {
 		return accounting.Company{}, false, fmt.Errorf("postgres: Company: %w", err)
 	}
@@ -44,7 +44,7 @@ func (r *accountingRepository) Company(ctx context.Context) (accounting.Company,
 	var companies []accounting.Company
 	for rows.Next() {
 		var c accounting.Company
-		if err := rows.Scan(&c.ID, &c.Name, &c.TimeZone); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.TimeZone, &c.RetainedEarningsCode); err != nil {
 			return accounting.Company{}, false, fmt.Errorf("postgres: scan company: %w", err)
 		}
 		companies = append(companies, c)
@@ -64,9 +64,12 @@ func (r *accountingRepository) Company(ctx context.Context) (accounting.Company,
 
 func (r *accountingRepository) SetCompany(ctx context.Context, c accounting.Company) error {
 	if _, err := r.pool.Exec(ctx, `
-INSERT INTO companies (id, name, timezone) VALUES ($1, $2, $3)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, timezone = EXCLUDED.timezone
-`, c.ID, c.Name, c.TimeZone); err != nil {
+INSERT INTO companies (id, name, timezone, retained_earnings_code) VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    timezone = EXCLUDED.timezone,
+    retained_earnings_code = EXCLUDED.retained_earnings_code
+`, c.ID, c.Name, c.TimeZone, c.RetainedEarningsCode); err != nil {
 		return fmt.Errorf("postgres: SetCompany: %w", err)
 	}
 	return nil

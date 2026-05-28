@@ -66,6 +66,8 @@ ledger seed seed/taiwan_ledger.yaml
 ledger book-run \
   --request "台北總公司以銀行存款支付中華電信辦公室電話費 NT\$3,150，含 5% 進項稅額 NT\$150。"
 
+ledger close --period 2026-05
+
 ledger tui
 ```
 
@@ -73,7 +75,51 @@ ledger tui
 
 `book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI-compatible; set `llm.model` and `llm.api_key` in `config.yaml` (or pass `--model`) and optionally `llm.base_url` for alternative providers.
 
+`close` closes an accounting period. For each branch with revenue or expense activity in the period it posts one balanced closing entry that drains every contributing account into the company's Retained Earnings account, links the closing entry back to each source entry through `JournalRelation` rows of type `closes`, then flips `Period.Status` to `closed`. Re-invoking against an already-closed period is a no-op. The use case refuses to close before `Period.End` has actually passed in `Company.TimeZone`, and refuses when no revenue or expense activity exists. The seed must set `company.retained_earnings_code` to the equity account the net income gets plugged into; see [`seed/taiwan_ledger.yaml`](seed/taiwan_ledger.yaml) for an example.
+
 `tui` opens the Bubble Tea terminal UI against the seeded ledger; same OpenAI requirement, no arguments.
+
+### Scheduling closings
+
+`ledger close` is rule-driven and meant to be invoked by an external scheduler — cron, a systemd timer, or a kubernetes `CronJob` — once a period has ended in the company's timezone. The use case itself is idempotent, so safe retries are part of the design.
+
+Example k8s `CronJob` that closes the previous calendar month at 02:00 UTC on the first of each month (Asia/Taipei = UTC+8, so 02:00 UTC is 10:00 local; well after the period boundary):
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ledger-close-monthly
+spec:
+  schedule: "0 2 1 * *"  # 02:00 UTC on the 1st of every month
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ledger
+              image: flarexio/ledger:latest
+              args:
+                - close
+                - --period
+                - $(PERIOD_ID)
+              env:
+                - name: PERIOD_ID
+                  value: "2026-05"  # supply the period id out-of-band
+              volumeMounts:
+                - name: workdir
+                  mountPath: /root/.flarex/accounting
+          volumes:
+            - name: workdir
+              secret:
+                secretName: ledger-config
+```
+
+For a systemd timer, point a `.service` unit at `ledger close --period <id>` and pair it with a `.timer` unit at `OnCalendar=monthly`. Either way, `Period.ID` is supplied out-of-band; `ledger close` does not infer it from the wall clock.
 
 ## Configuration
 
