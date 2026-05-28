@@ -155,6 +155,18 @@ func (r *Repository) Entries(_ context.Context) ([]accounting.JournalEntry, erro
 	return out, nil
 }
 
+func (r *Repository) EntriesByPeriod(_ context.Context, periodID string) ([]accounting.JournalEntry, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []accounting.JournalEntry
+	for _, e := range r.entries {
+		if e.PeriodID == periodID {
+			out = append(out, cloneAccountingEntry(e))
+		}
+	}
+	return out, nil
+}
+
 func (r *Repository) Company(_ context.Context) (accounting.Company, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

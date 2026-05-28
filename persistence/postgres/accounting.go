@@ -247,6 +247,21 @@ func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.Journa
 	if err != nil {
 		return nil, fmt.Errorf("postgres: ListEntries: %w", err)
 	}
+	return r.attachLines(ctx, rows)
+}
+
+// EntriesByPeriod returns posted entries filtered to periodID in the database,
+// each with its lines populated.
+func (r *accountingRepository) EntriesByPeriod(ctx context.Context, periodID string) ([]accounting.JournalEntry, error) {
+	rows, err := r.q.ListEntriesByPeriod(ctx, periodID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: ListEntriesByPeriod: %w", err)
+	}
+	return r.attachLines(ctx, rows)
+}
+
+// attachLines fetches every line for rows in one query and stitches them on by entry id.
+func (r *accountingRepository) attachLines(ctx context.Context, rows []pgstore.JournalEntry) ([]accounting.JournalEntry, error) {
 	if len(rows) == 0 {
 		return nil, nil
 	}

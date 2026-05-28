@@ -188,7 +188,7 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: retained_earnings_code %q must be an equity account", company.RetainedEarningsCode)
 	}
 
-	entries, err := uc.Repo.Entries(ctx)
+	entries, err := uc.Repo.EntriesByPeriod(ctx, intent.PeriodID)
 	if err != nil {
 		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load entries: %w", err)
 	}
@@ -205,9 +205,6 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 	branches := map[string]*branchAggregate{}
 
 	for _, entry := range entries {
-		if entry.PeriodID != intent.PeriodID {
-			continue
-		}
 		for _, line := range entry.Lines {
 			t, isTemporary := accountType[line.AccountCode]
 			if !isTemporary {
@@ -314,7 +311,7 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		closeIntent := accounting.JournalIntent{
 			Date:        period.End,
 			PeriodID:    period.ID,
-			Currency:    inferCurrency(entries, period.ID),
+			Currency:    inferCurrency(entries),
 			Description: fmt.Sprintf("Close period %s (branch %s)", period.ID, branchID),
 			Lines:       lines,
 		}
@@ -331,11 +328,11 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 	return period, plans, false, nil
 }
 
-// inferCurrency picks the currency of the first entry in the period; closing
-// entries inherit it so the validator's invariants stay symmetric.
-func inferCurrency(entries []accounting.JournalEntry, periodID string) string {
+// inferCurrency picks the currency of the first entry with a non-empty value;
+// closing entries inherit it so the validator's invariants stay symmetric.
+func inferCurrency(entries []accounting.JournalEntry) string {
 	for _, e := range entries {
-		if e.PeriodID == periodID && e.Currency != "" {
+		if e.Currency != "" {
 			return e.Currency
 		}
 	}
