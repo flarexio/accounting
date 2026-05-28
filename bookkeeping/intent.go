@@ -147,9 +147,9 @@ const intentSchemaJSON = `{
             "reason": {
               "type": "string",
               "enum": ["amount_error", "account_error", "duplicate", "customer_cancel", "period_end", "other"],
-              "description": "Classification of why the entry is being reversed; pick 'other' when no specific code fits."
+              "description": "Classification of why the entry is being reversed. Pick the most specific code: amount_error (wrong numbers), account_error (wrong account chosen), duplicate (same transaction posted twice), customer_cancel (refund/cancellation), period_end (closing adjustment). Use 'other' only when none of the above fits."
             },
-            "note": { "type": "string", "description": "Free-text rationale appended to the reversal description; may be empty." }
+            "note": { "type": "string", "description": "State the factual error in one short sentence -- e.g. 'amount should be 95000, not 105000', 'duplicate of JE-0050', 'customer cancelled on 5/15'. Do not restate that a reversal is happening; that is implied. May be empty." }
           }
         }
       ]
