@@ -383,7 +383,6 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 			ToEntry:   rel.ToEntry,
 			Type:      string(rel.Type),
 			Reason:    string(rel.Reason),
-			Amount:    rel.Amount,
 			Note:      rel.Note,
 		}); err != nil {
 			return fmt.Errorf("postgres: InsertRelation: %w", err)
@@ -438,7 +437,6 @@ func relationFromRow(row pgstore.JournalRelation) accounting.JournalRelation {
 		ToEntry:   row.ToEntry,
 		Type:      accounting.JournalRelationType(row.Type),
 		Reason:    accounting.RelationReason(row.Reason),
-		Amount:    row.Amount,
 		Note:      row.Note,
 	}
 }

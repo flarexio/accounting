@@ -151,14 +151,10 @@ const (
 // JournalRelation is a directional, typed link between two posted entries.
 // It is append-only with composite identity (FromEntry, ToEntry); a wrong
 // relation is corrected by appending another relation, not by editing the row.
-// Amount is reserved in the data model for partial relations (e.g. partial
-// reversals) but the validator rejects non-zero values until a future intent
-// needs them.
 type JournalRelation struct {
 	FromEntry string              `json:"from_entry"`
 	ToEntry   string              `json:"to_entry"`
 	Type      JournalRelationType `json:"type"`
 	Reason    RelationReason      `json:"reason,omitempty"`
-	Amount    int64               `json:"amount,omitempty"`
 	Note      string              `json:"note,omitempty"`
 }

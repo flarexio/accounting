@@ -146,13 +146,6 @@ func (v Validator) ValidateRelation(ctx context.Context, rel JournalRelation, fr
 		errs = append(errs, fmt.Errorf("type %q is not a known relation kind", rel.Type))
 	}
 
-	if rel.Amount < 0 {
-		errs = append(errs, fmt.Errorf("amount must be non-negative, got %d", rel.Amount))
-	}
-	if rel.Amount > 0 {
-		errs = append(errs, errors.New("partial relations (amount > 0) are reserved but not yet supported"))
-	}
-
 	if rel.ToEntry == "" {
 		errs = append(errs, errors.New("to_entry is required"))
 		return errors.Join(errs...)
@@ -174,7 +167,7 @@ func (v Validator) ValidateRelation(ctx context.Context, rel JournalRelation, fr
 		errs = append(errs, fmt.Errorf("from_entry posted %s precedes to_entry posted %s", fromEntry.PostedAt, to.PostedAt))
 	}
 
-	if rel.Type == RelationReverses && rel.Amount == 0 {
+	if rel.Type == RelationReverses {
 		if err := validateReversalMirror(fromEntry, to); err != nil {
 			errs = append(errs, err)
 		}

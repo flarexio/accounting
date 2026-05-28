@@ -48,7 +48,7 @@ Reference data (seeded; read by the validator)
    ┌──────────────────┴───┴───────────────────────┐
    │              JournalRelation                 │   « Aggregate Root »
    │   (from_entry, to_entry) composite identity  │   M:N, append-only
-   │   type, reason, amount, note                 │
+   │   type, reason, note                         │
    └──────────────────────────────────────────────┘
 
 
@@ -117,8 +117,6 @@ Dates and instants are different types on purpose. `accounting.Date` (year/month
 - `from_entry` was posted no earlier than `to_entry`
 - `type` is one of the known relation kinds
 - for `type = reverses`, the from entry's lines are the mirror image of the to entry's — sides swapped, with amounts, accounts, and branches preserved
-
-`JournalRelation.Amount` is reserved in the data model for partial reversals but the validator rejects non-zero values today; partial-reversal semantics will be lifted when a future intent needs them.
 
 Currency precision is deliberately not validated: both `3150` and `315000` are legal `int64` values that balance, so code cannot disambiguate the intended scale from the line alone. The ISO 4217 minor-unit mapping (TWD = exponent 0, USD = 2, BHD = 3, ...) lives in the bookkeeper prompt as judgment, not in the validator as a contract. If a model picks the wrong scale, the entry still posts; this is the documented trade-off behind storing amounts as `int64` minor units.
 
