@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"sort"
 	"strings"
@@ -217,6 +218,24 @@ func (r *Repository) Apply(_ context.Context, evt accounting.JournalPosted) erro
 	r.entries = append(r.entries, stored)
 	r.entryIdx[stored.ID] = len(r.entries) - 1
 	r.relations = append(r.relations, evt.Relations...)
+	if evt.Subject != "" && evt.Sequence > r.lastSeq[evt.Subject] {
+		r.lastSeq[evt.Subject] = evt.Sequence
+	}
+	return nil
+}
+
+// ApplyPeriodClosure flips the named period to closed and advances
+// LastSequence for evt.Subject under one mutex. An unknown period id is an
+// error so an event for a never-seeded period does not silently disappear.
+func (r *Repository) ApplyPeriodClosure(_ context.Context, evt accounting.PeriodClosure) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.periods[evt.Period.ID]
+	if !ok {
+		return fmt.Errorf("memory: ApplyPeriodClosure: period %q does not exist", evt.Period.ID)
+	}
+	p.Status = accounting.PeriodClosed
+	r.periods[evt.Period.ID] = p
 	if evt.Subject != "" && evt.Sequence > r.lastSeq[evt.Subject] {
 		r.lastSeq[evt.Subject] = evt.Sequence
 	}

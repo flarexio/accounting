@@ -45,71 +45,53 @@ func (uc ClosePeriod) Validate(ctx context.Context, intent ClosePeriodIntent) er
 	return err
 }
 
-// Execute closes the period: posts one closing JournalEntry per branch with
-// activity, with `closes` relations to each contributing source entry, then
-// flips Period.Status to closed. It does not re-validate; unvalidated callers
-// must use Handle. Returns an already-closed result with no entries when the
-// period was already closed.
+// Execute publishes the pre-built closing entries, then publishes a
+// PeriodClosure event to flip Period.Status. It does not re-validate;
+// unvalidated callers must use Handle. Returns an already-closed result with
+// no entries when the period was already closed or when the projection shows
+// rev/exp accounts already net to zero (i.e. a previous Execute posted the
+// closing entries but crashed before publishing the closure -- the retry just
+// re-publishes the closure).
 func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (ClosePeriodResult, error) {
 	period, plans, alreadyClosed, err := uc.prepare(ctx, intent)
 	if err != nil {
 		return ClosePeriodResult{}, err
 	}
-	if alreadyClosed {
-		return ClosePeriodResult{PeriodID: intent.PeriodID, AlreadyClosed: true}, nil
-	}
-
-	subject := uc.Subject
-	if subject == "" {
-		subject = SubjectLedger
-	}
 
 	posted := make([]accounting.JournalEntry, 0, len(plans))
 	for _, plan := range plans {
-		lastSeq, err := uc.Repo.LastSequence(ctx, subject)
-		if err != nil {
-			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: read last sequence: %w", err)
-		}
-
-		entry := accounting.JournalEntry{
-			ID:          accounting.FormatEntryID(lastSeq + 1),
-			Date:        plan.intent.Date,
-			PeriodID:    plan.intent.PeriodID,
-			Currency:    plan.intent.Currency,
-			Description: plan.intent.Description,
-			Lines:       plan.intent.Lines,
-			PostedAt:    uc.now(),
-		}
-
-		relations := make([]accounting.JournalRelation, len(plan.sources))
-		for i, src := range plan.sources {
-			relations[i] = accounting.JournalRelation{
-				FromEntry: entry.ID,
-				ToEntry:   src,
-				Type:      accounting.RelationCloses,
-				Reason:    accounting.ReasonPeriodEnd,
-			}
-		}
-
 		dispatched, err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
-			Entry:     entry,
-			Relations: relations,
-		}, accounting.ExpectedSequence{
-			Subject: subject,
-			LastSeq: lastSeq,
-		})
+			Entry:     plan.entry,
+			Relations: plan.relations,
+		}, plan.expect)
 		if err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish: %w", err)
 		}
 		posted = append(posted, dispatched.Entry)
 	}
 
-	period.Status = accounting.PeriodClosed
-	if err := uc.Repo.PutPeriod(ctx, period); err != nil {
-		return ClosePeriodResult{}, fmt.Errorf("bookkeeping: close period %q: %w", intent.PeriodID, err)
+	if period.Status != accounting.PeriodClosed {
+		closurePub, ok := uc.Publisher.(PeriodClosurePublisher)
+		if !ok {
+			return ClosePeriodResult{}, errors.New("bookkeeping: publisher does not support period closure events")
+		}
+		closedPeriod := period
+		closedPeriod.Status = accounting.PeriodClosed
+		lastClosureSeq, err := uc.Repo.LastSequence(ctx, SubjectPeriodClosure)
+		if err != nil {
+			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: read period-closure sequence: %w", err)
+		}
+		if _, err := closurePub.PublishPeriodClosure(ctx, accounting.PeriodClosure{
+			Period: closedPeriod,
+		}, accounting.ExpectedSequence{
+			Subject: SubjectPeriodClosure,
+			LastSeq: lastClosureSeq,
+		}); err != nil {
+			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish period closure: %w", err)
+		}
 	}
 
-	return ClosePeriodResult{PeriodID: intent.PeriodID, Entries: posted}, nil
+	return ClosePeriodResult{PeriodID: intent.PeriodID, AlreadyClosed: alreadyClosed, Entries: posted}, nil
 }
 
 // Handle validates intent and, if clean, executes it.
@@ -128,11 +110,28 @@ func (uc ClosePeriod) now() time.Time {
 	return uc.Clock()
 }
 
-type closingPlan struct {
-	intent  accounting.JournalIntent
-	sources []string
+// subject resolves the publish subject; empty Subject falls back to SubjectLedger.
+func (uc ClosePeriod) subject() string {
+	if uc.Subject == "" {
+		return SubjectLedger
+	}
+	return uc.Subject
 }
 
+// closingPlan is one fully-built closing event ready to publish: the entry has
+// its ID and PostedAt assigned, the `closes` relations are constructed, and
+// expect carries the optimistic-concurrency hint for the publish.
+type closingPlan struct {
+	entry     accounting.JournalEntry
+	relations []accounting.JournalRelation
+	expect    accounting.ExpectedSequence
+}
+
+// prepare resolves the period, validates every closing intent, and returns the
+// fully-built list of events ready for Execute to publish. alreadyClosed is
+// true when the period is already in PeriodClosed, or when rev/exp activity
+// exists but every branch nets to zero (the closing entries are already in
+// place; just the period flip is missing).
 func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (accounting.Period, []closingPlan, bool, error) {
 	if uc.Repo == nil {
 		return accounting.Period{}, nil, false, errors.New("bookkeeping: close period has no repository")
@@ -239,7 +238,15 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 	}
 	sort.Strings(branchIDs)
 
+	subject := uc.subject()
+	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
+	if err != nil {
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: read last sequence: %w", err)
+	}
+	postedAt := uc.now()
+	currency := inferCurrency(entries)
 	validator := accounting.Validator{Repo: uc.Repo}
+
 	plans := make([]closingPlan, 0, len(branches))
 	for _, branchID := range branchIDs {
 		agg := branches[branchID]
@@ -304,18 +311,51 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		closeIntent := accounting.JournalIntent{
 			Date:        period.End,
 			PeriodID:    period.ID,
-			Currency:    inferCurrency(entries),
+			Currency:    currency,
 			Description: fmt.Sprintf("Close period %s (branch %s)", period.ID, branchID),
 			Lines:       lines,
 		}
 		if err := validator.Validate(ctx, closeIntent); err != nil {
 			return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: close period %q branch %q: %w", period.ID, branchID, err)
 		}
-		plans = append(plans, closingPlan{intent: closeIntent, sources: sources})
+
+		// Pre-assign the entry ID and PostedAt so Execute publishes a
+		// fully-formed entry. Each successive publish advances the broker's
+		// stream sequence by one, so plan i expects lastSeq + i and assigns
+		// JE-{lastSeq+i+1}.
+		expectLast := lastSeq + uint64(len(plans))
+		entry := accounting.JournalEntry{
+			ID:          accounting.FormatEntryID(expectLast + 1),
+			Date:        closeIntent.Date,
+			PeriodID:    closeIntent.PeriodID,
+			Currency:    closeIntent.Currency,
+			Description: closeIntent.Description,
+			Lines:       closeIntent.Lines,
+			PostedAt:    postedAt,
+		}
+		relations := make([]accounting.JournalRelation, len(sources))
+		for i, src := range sources {
+			relations[i] = accounting.JournalRelation{
+				FromEntry: entry.ID,
+				ToEntry:   src,
+				Type:      accounting.RelationCloses,
+				Reason:    accounting.ReasonPeriodEnd,
+			}
+		}
+		plans = append(plans, closingPlan{
+			entry:     entry,
+			relations: relations,
+			expect:    accounting.ExpectedSequence{Subject: subject, LastSeq: expectLast},
+		})
 	}
 
+	// rev/exp activity exists but every branch nets to zero: either every
+	// closing entry has already been posted (a previous Execute crashed before
+	// flipping the period and the retry sees nothing left to do) or the period
+	// genuinely netted to zero from offsetting entries. Either way Execute
+	// just needs to flip the period.
 	if len(plans) == 0 {
-		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: period %q nets to zero across every branch; nothing to close", intent.PeriodID)
+		return period, nil, true, nil
 	}
 
 	return period, plans, false, nil

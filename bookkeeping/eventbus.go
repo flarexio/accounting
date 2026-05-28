@@ -33,9 +33,35 @@ type EventSubscriber interface {
 	Subscribe(handler EventHandler) error
 }
 
+// PeriodClosurePublisher publishes a PeriodClosure on the dedicated period
+// subject; the transport assigns Subject and Sequence.
+type PeriodClosurePublisher interface {
+	PublishPeriodClosure(ctx context.Context, evt accounting.PeriodClosure, expect accounting.ExpectedSequence) (accounting.PeriodClosure, error)
+}
+
+// PeriodClosureHandler consumes a PeriodClosure, typically by calling
+// LedgerRepository.ApplyPeriodClosure.
+type PeriodClosureHandler interface {
+	HandlePeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error
+}
+
+// PeriodClosureHandlerFunc adapts an ordinary function to PeriodClosureHandler.
+type PeriodClosureHandlerFunc func(ctx context.Context, evt accounting.PeriodClosure) error
+
+func (f PeriodClosureHandlerFunc) HandlePeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error {
+	return f(ctx, evt)
+}
+
+// PeriodClosureSubscriber registers a handler for PeriodClosure events.
+type PeriodClosureSubscriber interface {
+	SubscribePeriodClosure(handler PeriodClosureHandler) error
+}
+
 // EventBus is the bidirectional transport contract for the bookkeeping flow.
 type EventBus interface {
 	EventPublisher
 	EventSubscriber
+	PeriodClosurePublisher
+	PeriodClosureSubscriber
 	io.Closer
 }

@@ -52,7 +52,8 @@ func buildRepository(ctx context.Context, persist config.Persistence, embed conf
 	}
 }
 
-// buildMessaging opens the EventBus and subscribes a handler that applies events to repo.
+// buildMessaging opens the EventBus and subscribes both the JournalPosted and
+// PeriodClosure handlers that apply events to repo.
 func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeping.EventBus, error) {
 	bus, err := openBus(ctx, cfg)
 	if err != nil {
@@ -64,6 +65,13 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 	if err := bus.Subscribe(apply); err != nil {
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)
+	}
+	applyClosure := bookkeeping.PeriodClosureHandlerFunc(func(ctx context.Context, evt accounting.PeriodClosure) error {
+		return repo.ApplyPeriodClosure(ctx, evt)
+	})
+	if err := bus.SubscribePeriodClosure(applyClosure); err != nil {
+		_ = bus.Close()
+		return nil, fmt.Errorf("book-run: subscribe closure: %w", err)
 	}
 	return bus, nil
 }

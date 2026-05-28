@@ -39,12 +39,11 @@ func closingScenario() accounting.Scenario {
 	}
 }
 
-func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
+// wireClosingBus wires an inproc bus to the JournalPosted and PeriodClosure
+// projection handlers, matching the production composition in
+// cmd/ledger/compose.go.
+func wireClosingBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBus {
 	t.Helper()
-	repo := memory.NewAccountingRepository()
-	if err := closingScenario().Seed(context.Background(), repo); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	bus := inproc.NewAccountingBus()
 	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
@@ -52,7 +51,22 @@ func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.Event
 	if err := bus.Subscribe(apply); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
-	return repo, bus
+	closure := bookkeeping.PeriodClosureHandlerFunc(func(ctx context.Context, evt accounting.PeriodClosure) error {
+		return repo.ApplyPeriodClosure(ctx, evt)
+	})
+	if err := bus.SubscribePeriodClosure(closure); err != nil {
+		t.Fatalf("subscribe closure: %v", err)
+	}
+	return bus
+}
+
+func closingLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
+	t.Helper()
+	repo := memory.NewAccountingRepository()
+	if err := closingScenario().Seed(context.Background(), repo); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	return repo, wireClosingBus(t, repo)
 }
 
 func postClosingActivity(t *testing.T, repo accounting.LedgerRepository, bus bookkeeping.EventBus) []accounting.JournalEntry {
@@ -210,6 +224,54 @@ func TestClosePeriod_IdempotentWhenAlreadyClosed(t *testing.T) {
 	}
 }
 
+func TestClosePeriod_ResumesAfterCrashBetweenPostAndFlip(t *testing.T) {
+	ctx := context.Background()
+	repo, bus := closingLedger(t)
+	postClosingActivity(t, repo, bus)
+
+	// Simulate the post-then-crash window: run a full close, then revert the
+	// period back to open. The closing entries are still in the projection,
+	// but Period.Status was never flipped. A retry should see that the
+	// remaining rev/exp balances all net to zero, post no new entries, and
+	// just flip the period.
+	uc := bookkeeping.ClosePeriod{Repo: repo, Publisher: bus, Clock: closingClock}
+	if _, err := uc.Handle(ctx, bookkeeping.ClosePeriodIntent{PeriodID: "2026-05"}); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	entriesAfterFirst, _ := repo.Entries(ctx)
+
+	openPeriod := accounting.Period{
+		ID:     "2026-05",
+		Start:  accounting.NewDate(2026, 5, 1),
+		End:    accounting.NewDate(2026, 5, 31),
+		Status: accounting.PeriodOpen,
+	}
+	if err := repo.PutPeriod(ctx, openPeriod); err != nil {
+		t.Fatalf("revert period to open: %v", err)
+	}
+
+	result, err := uc.Handle(ctx, bookkeeping.ClosePeriodIntent{PeriodID: "2026-05"})
+	if err != nil {
+		t.Fatalf("resume close: %v", err)
+	}
+	if !result.AlreadyClosed {
+		t.Fatalf("expected already_closed when closing entries are already in place, got %+v", result)
+	}
+	if len(result.Entries) != 0 {
+		t.Fatalf("expected no new entries on resume, got %d", len(result.Entries))
+	}
+
+	entriesAfterResume, _ := repo.Entries(ctx)
+	if len(entriesAfterResume) != len(entriesAfterFirst) {
+		t.Fatalf("expected no new entries posted on resume, before=%d after=%d", len(entriesAfterFirst), len(entriesAfterResume))
+	}
+
+	period, _, _ := repo.Period(ctx, "2026-05")
+	if period.Status != accounting.PeriodClosed {
+		t.Fatalf("expected resume to flip the period to closed, got %q", period.Status)
+	}
+}
+
 func TestClosePeriod_RefusesPeriodNotYetEnded(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := closingLedger(t)
@@ -239,13 +301,7 @@ func TestClosePeriod_RefusesStillOpenInCompanyTimezone(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 	postClosingActivity(t, repo, bus)
 
 	// 2026-05-31 23:30 UTC is already 2026-06-01 in Asia/Taipei (UTC+8) -- but
@@ -308,13 +364,7 @@ func TestClosePeriod_RefusesMissingRetainedEarningsCode(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 	postClosingActivity(t, repo, bus)
 
 	uc := bookkeeping.ClosePeriod{Repo: repo, Publisher: bus, Clock: closingClock}
@@ -331,13 +381,7 @@ func TestClosePeriod_MultipleBranches(t *testing.T) {
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
+	bus := wireClosingBus(t, repo)
 
 	post := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	if _, err := post.Handle(ctx, accounting.JournalIntent{
@@ -381,5 +425,13 @@ func TestClosePeriod_MultipleBranches(t *testing.T) {
 	}
 	if !branches["main"] || !branches["annex"] {
 		t.Fatalf("expected closing entries for both branches, got %v", branches)
+	}
+	// Pre-built IDs must be distinct and non-empty -- prepare assigns them
+	// off a single lastSeq read before any publish runs.
+	if result.Entries[0].ID == "" || result.Entries[1].ID == "" {
+		t.Fatalf("expected non-empty entry IDs, got %q and %q", result.Entries[0].ID, result.Entries[1].ID)
+	}
+	if result.Entries[0].ID == result.Entries[1].ID {
+		t.Fatalf("expected distinct entry IDs across branches, got %q twice", result.Entries[0].ID)
 	}
 }
