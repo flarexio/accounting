@@ -61,20 +61,8 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 		return nil, err
 	}
 	router := bookkeeping.NewRouter().
-		On(accounting.SubjectJournalPosted, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
-			je, ok := evt.(accounting.JournalPosted)
-			if !ok {
-				return fmt.Errorf("book-run: subject %q delivered %T, want JournalPosted", evt.EventSubject(), evt)
-			}
-			return repo.Apply(ctx, je)
-		})).
-		On(accounting.SubjectPeriodClosure, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
-			pc, ok := evt.(accounting.PeriodClosure)
-			if !ok {
-				return fmt.Errorf("book-run: subject %q delivered %T, want PeriodClosure", evt.EventSubject(), evt)
-			}
-			return repo.ApplyPeriodClosure(ctx, pc)
-		}))
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo}).
+		On(accounting.SubjectPeriodClosure, &bookkeeping.ApplyPeriodClosure{Repo: repo})
 	if err := bus.Subscribe(router); err != nil {
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)

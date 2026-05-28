@@ -46,12 +46,8 @@ func wireClosingBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.
 	t.Helper()
 	bus := inproc.NewAccountingBus()
 	router := bookkeeping.NewRouter().
-		On(accounting.SubjectJournalPosted, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
-			return repo.Apply(ctx, evt.(accounting.JournalPosted))
-		})).
-		On(accounting.SubjectPeriodClosure, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
-			return repo.ApplyPeriodClosure(ctx, evt.(accounting.PeriodClosure))
-		}))
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo}).
+		On(accounting.SubjectPeriodClosure, &bookkeeping.ApplyPeriodClosure{Repo: repo})
 	if err := bus.Subscribe(router); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}

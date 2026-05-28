@@ -50,9 +50,7 @@ func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBu
 	t.Helper()
 	bus := inproc.NewAccountingBus()
 	router := bookkeeping.NewRouter().
-		On(accounting.SubjectJournalPosted, bookkeeping.EventHandlerFunc(func(ctx context.Context, evt bookkeeping.Event) error {
-			return repo.Apply(ctx, evt.(accounting.JournalPosted))
-		}))
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo})
 	if err := bus.Subscribe(router); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
