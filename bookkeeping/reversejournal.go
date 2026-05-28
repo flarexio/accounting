@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/flarexio/accounting"
 )
 
-// ReverseJournal is the "reverse a posted entry" use case. It builds the
-// mirror-image entry -- every line's side swapped -- and posts it through
-// PostJournal into the original's period and date. The original entry is
-// never touched.
+// ReverseJournal is the "reverse a posted entry" use case. It loads the named
+// entry, builds the mirror-image reversal, and posts the new entry together
+// with a JournalRelation linking it back to the original. The original entry
+// is never touched.
 type ReverseJournal struct {
 	Repo      accounting.LedgerRepository
 	Publisher EventPublisher
@@ -19,24 +20,33 @@ type ReverseJournal struct {
 	Subject   string
 }
 
-// Validate runs no side effect; it reports whether intent names an existing
-// entry and the resulting reversal satisfies every accounting invariant.
+// Validate reports whether intent names an existing entry, the mirror reversal
+// satisfies every JournalIntent invariant, and the resulting JournalRelation
+// satisfies every relation invariant. It runs no side effect.
 func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseIntent) error {
-	reversal, err := uc.reversalIntent(ctx, intent)
-	if err != nil {
-		return err
-	}
-	return uc.post().Validate(ctx, reversal)
+	_, _, _, _, err := uc.prepare(ctx, intent)
+	return err
 }
 
-// Execute posts the reversing entry for an already-validated intent. It does
-// not re-validate; unvalidated callers must use Handle.
+// Execute prepares the reversal entry and its linking relation and publishes
+// them as a single JournalPosted; the projection writes both in one
+// transaction. It does not re-validate; unvalidated callers must use Handle.
 func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, error) {
-	reversal, err := uc.reversalIntent(ctx, intent)
+	entry, rel, lastSeq, subject, err := uc.prepare(ctx, intent)
 	if err != nil {
 		return accounting.JournalEntry{}, err
 	}
-	return uc.post().Execute(ctx, reversal)
+	dispatched, err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
+		Entry:     entry,
+		Relations: []accounting.JournalRelation{rel},
+	}, accounting.ExpectedSequence{
+		Subject: subject,
+		LastSeq: lastSeq,
+	})
+	if err != nil {
+		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publish: %w", err)
+	}
+	return dispatched.Entry, nil
 }
 
 // Handle validates intent and, if clean, executes it.
@@ -47,49 +57,89 @@ func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseIntent) (acco
 	return uc.Execute(ctx, intent)
 }
 
-func (uc ReverseJournal) post() PostJournal {
-	return PostJournal{
-		Repo:      uc.Repo,
-		Publisher: uc.Publisher,
-		Clock:     uc.Clock,
-		Subject:   uc.Subject,
-	}
-}
-
-func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseIntent) (accounting.JournalIntent, error) {
+// prepare loads the original entry, builds the mirror reversal entry and its
+// linking relation, and runs both the JournalIntent and JournalRelation
+// validators. It does not publish.
+func (uc ReverseJournal) prepare(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, accounting.JournalRelation, uint64, string, error) {
 	if uc.Repo == nil {
-		return accounting.JournalIntent{}, errors.New("bookkeeping: reverse journal has no repository")
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", errors.New("bookkeeping: reverse journal has no repository")
+	}
+	if uc.Publisher == nil {
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", errors.New("bookkeeping: reverse journal has no event publisher")
 	}
 	if intent.EntryID == "" {
-		return accounting.JournalIntent{}, errors.New("bookkeeping: reverse journal needs an entry_id")
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", errors.New("bookkeeping: reverse journal needs an entry_id")
 	}
 
-	entry, ok, err := uc.Repo.Entry(ctx, intent.EntryID)
+	original, ok, err := uc.Repo.Entry(ctx, intent.EntryID)
 	if err != nil {
-		return accounting.JournalIntent{}, fmt.Errorf("bookkeeping: load entry %q: %w", intent.EntryID, err)
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", fmt.Errorf("bookkeeping: load entry %q: %w", intent.EntryID, err)
 	}
 	if !ok {
-		return accounting.JournalIntent{}, fmt.Errorf("bookkeeping: entry %q is not in the ledger", intent.EntryID)
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", fmt.Errorf("bookkeeping: entry %q is not in the ledger", intent.EntryID)
 	}
 
-	lines := make([]accounting.JournalLine, len(entry.Lines))
-	for i, line := range entry.Lines {
+	lines := make([]accounting.JournalLine, len(original.Lines))
+	for i, line := range original.Lines {
 		line.Side = flipSide(line.Side)
 		lines[i] = line
 	}
 
-	description := fmt.Sprintf("Reversal of %s", entry.ID)
-	if intent.Reason != "" {
-		description += ": " + intent.Reason
+	description := fmt.Sprintf("Reversal of %s", original.ID)
+	if intent.Note != "" {
+		description += ": " + intent.Note
 	}
 
-	return accounting.JournalIntent{
-		Date:        entry.Date,
-		PeriodID:    entry.PeriodID,
-		Currency:    entry.Currency,
+	revIntent := accounting.JournalIntent{
+		Date:        original.Date,
+		PeriodID:    original.PeriodID,
+		Currency:    original.Currency,
 		Description: description,
 		Lines:       lines,
-	}, nil
+	}
+
+	validator := accounting.Validator{Repo: uc.Repo}
+	if err := validator.Validate(ctx, revIntent); err != nil {
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", err
+	}
+
+	subject := uc.Subject
+	if subject == "" {
+		subject = SubjectLedger
+	}
+	clock := uc.Clock
+	if clock == nil {
+		clock = func() time.Time { return time.Now().UTC() }
+	}
+
+	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
+	if err != nil {
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", fmt.Errorf("bookkeeping: read last sequence: %w", err)
+	}
+
+	revEntry := accounting.JournalEntry{
+		ID:          accounting.FormatEntryID(lastSeq + 1),
+		Date:        revIntent.Date,
+		PeriodID:    revIntent.PeriodID,
+		Currency:    revIntent.Currency,
+		Description: revIntent.Description,
+		Lines:       revIntent.Lines,
+		PostedAt:    clock(),
+	}
+
+	rel := accounting.JournalRelation{
+		FromEntry: revEntry.ID,
+		ToEntry:   original.ID,
+		Type:      accounting.RelationReverses,
+		Reason:    intent.Reason,
+		Note:      intent.Note,
+	}
+
+	if err := validator.ValidateRelation(ctx, rel, revEntry); err != nil {
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", err
+	}
+
+	return revEntry, rel, lastSeq, subject, nil
 }
 
 func flipSide(side accounting.LineSide) accounting.LineSide {

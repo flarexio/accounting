@@ -18,7 +18,65 @@ bookkeeping request
 
 The bookkeeping layer does not mutate the projection directly. Producers validate and publish events; the subscribed `Apply` handler is the single writer to the `LedgerRepository` projection. This keeps command handling, event publication, and projection state separate enough to test each part directly.
 
-## Model
+## Domain Model
+
+The conceptual shape of the domain: what references what, which aggregates exist, where the value objects live. Persistence (tables, columns, indexes) is a separate concern handled per adapter and lives outside this section.
+
+```text
+                  ┌──────────────────────┐
+                  │       Company        │   « Singleton Aggregate »
+                  └──────────────────────┘
+
+
+Reference data (seeded; read by the validator)
+┌──────────┐      ┌──────────┐      ┌──────────┐
+│ Account  │      │  Period  │      │  Branch  │
+└──────────┘      └──────────┘      └──────────┘
+     ▲                  ▲                  ▲
+     │ account_code     │ period_id        │ branch_id
+     │                  │                  │
+┌────┴──────────────────┴──────────────────┴─────┐
+│              JournalEntry                      │   « Aggregate Root »
+│   id, date, period_id, currency, posted_at     │   immutable on post,
+│   └── JournalLine [1..*] « VO »                │   append-only
+│        └── Dimensions « VO »                   │
+└────────────────────────────────────────────────┘
+                      ▲   ▲
+                      │   │
+                 from │   │ to
+                      │   │
+   ┌──────────────────┴───┴───────────────────────┐
+   │              JournalRelation                 │   « Aggregate Root »
+   │   (from_entry, to_entry) composite identity  │   M:N, append-only
+   │   type, reason, amount, note                 │
+   └──────────────────────────────────────────────┘
+
+
+Transient (lives only between validation and Apply)
+┌──────────────────┐
+│  JournalIntent   │  ── Validator + Apply ──►  becomes a JournalEntry
+└──────────────────┘
+
+
+Integration event
+« Domain Event »  JournalPosted
+  ├── entry      : JournalEntry
+  └── relations  : [JournalRelation]  0..*
+
+  ── Apply (single writer) ──►  LedgerRepository projection
+```
+
+**Aggregates.** `Company` is a singleton aggregate. `JournalEntry` is the posting aggregate root and seals its `JournalLine` value objects on post. `JournalRelation` is its own aggregate that references two `JournalEntry` roots without belonging to either — this is what lets one entry be referenced by many later entries (M:N).
+
+**Reference data.** `Account`, `Period`, `Branch` are seeded entities the validator reads from. A journal line references an account code and a branch id rather than embedding them, which keeps the journal aggregate independent of chart-of-accounts maintenance.
+
+**Value objects.** `JournalLine` and `Dimensions` have no identity of their own; they live and die with their parent `JournalEntry` and are compared by value. Amounts are `int64` minor units.
+
+**Intent vs entry.** `JournalIntent` is a proposed transaction with no identity; it lives only long enough to be validated and either become a `JournalEntry` (after `Apply`) or be rejected.
+
+**Integration event.** `JournalPosted` is the only path from a use case to the projection. It carries the new `JournalEntry` and any `JournalRelation`s created with it; the subscribed `Apply` handler writes both in one transaction so the projection never observes an entry without its relations.
+
+## Concepts
 
 | Concept | Type | Notes |
 | --- | --- | --- |
@@ -29,6 +87,7 @@ The bookkeeping layer does not mutate the projection directly. Producers validat
 | Journal line | `accounting.JournalLine` | One debit or credit; amount is stored in minor currency units. |
 | Branch dimension | `accounting.Dimensions.BranchID` | Reporting tag on a line, not a separate ledger. Required on every line; single-location companies seed one called `main`. |
 | Future dimensions | `accounting.Dimensions.Tags` | Open-ended tags for project, department, channel, or similar reporting dimensions. |
+| Journal relation | `accounting.JournalRelation` | Directional, typed link between two posted entries (e.g. a reversal pointing at its original). Append-only; composite identity `(from_entry, to_entry)`. |
 
 Amounts use `int64` minor units so balance checks are exact and never depend on floating-point comparison.
 
@@ -51,6 +110,16 @@ Dates and instants are different types on purpose. `accounting.Date` (year/month
 
 `Validator.Validate` joins violations so one feedback cycle can give the model enough information to correct multiple mistakes at once.
 
+`Validator.ValidateRelation` enforces the relation rules:
+
+- both `from_entry` and `to_entry` exist in the ledger
+- `from_entry` is not equal to `to_entry`
+- `from_entry` was posted no earlier than `to_entry`
+- `type` is one of the known relation kinds
+- for `type = reverses`, the from entry's lines are the mirror image of the to entry's — sides swapped, with amounts, accounts, and branches preserved
+
+`JournalRelation.Amount` is reserved in the data model for partial reversals but the validator rejects non-zero values today; partial-reversal semantics will be lifted when a future intent needs them.
+
 Currency precision is deliberately not validated: both `3150` and `315000` are legal `int64` values that balance, so code cannot disambiguate the intended scale from the line alone. The ISO 4217 minor-unit mapping (TWD = exponent 0, USD = 2, BHD = 3, ...) lives in the bookkeeper prompt as judgment, not in the validator as a contract. If a model picks the wrong scale, the entry still posts; this is the documented trade-off behind storing amounts as `int64` minor units.
 
 ## Use Cases
@@ -60,15 +129,15 @@ Currency precision is deliberately not validated: both `3150` and `315000` are l
 | Use case | Intent | What it does |
 | --- | --- | --- |
 | `PostJournal` | `post_journal` | Posts a balanced double-entry journal entry. |
-| `ReverseJournal` | `reverse_journal` | Creates a mirror-image reversal for an existing posted entry. |
+| `ReverseJournal` | `reverse_journal` | Creates a mirror-image reversal of an existing posted entry and links it back through a `JournalRelation` of type `reverses`; entry and relation are applied atomically. |
 
 `bookkeeping.Intent` is the typed union emitted by the agent. `bookkeeping.Registry` maps each intent kind to a validate/execute handler. Adding a bookkeeping operation means adding a route to the registry and exposing it in the prompt's intent menu.
 
 ## Posting And Immutability
 
-A posted `JournalEntry` is immutable. Corrections are represented as new journal entries, usually through `reverse_journal`, never by editing an existing posted entry in place.
+A posted `JournalEntry` is immutable. Corrections are represented as new journal entries, usually through `reverse_journal`, never by editing an existing posted entry in place. The new entry is linked back to the original through a `JournalRelation`, which is itself append-only — a wrong relation is corrected by appending another relation, not by editing the row.
 
-`PostJournal` derives the entry ID from the expected broker sequence, stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. Repository reads return copies so callers cannot mutate stored state through returned values.
+`PostJournal` derives the entry ID from the expected broker sequence, stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `Apply` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
 
 ## Branches
 

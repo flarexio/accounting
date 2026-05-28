@@ -120,3 +120,43 @@ type JournalEntry struct {
 	Lines       []JournalLine `json:"lines"`
 	PostedAt    time.Time     `json:"posted_at"`
 }
+
+// JournalRelationType classifies a JournalRelation; new kinds are added when
+// a new business operation needs structural linkage between posted entries.
+type JournalRelationType string
+
+const (
+	RelationReverses JournalRelationType = "reverses"
+	RelationCorrects JournalRelationType = "corrects"
+	RelationSettles  JournalRelationType = "settles"
+	RelationCloses   JournalRelationType = "closes"
+	RelationAdjusts  JournalRelationType = "adjusts"
+)
+
+// RelationReason classifies why a relation was created; free-text rationale
+// belongs in JournalRelation.Note rather than here.
+type RelationReason string
+
+const (
+	ReasonAmountError    RelationReason = "amount_error"
+	ReasonAccountError   RelationReason = "account_error"
+	ReasonDuplicate      RelationReason = "duplicate"
+	ReasonCustomerCancel RelationReason = "customer_cancel"
+	ReasonPeriodEnd      RelationReason = "period_end"
+	ReasonOther          RelationReason = "other"
+)
+
+// JournalRelation is a directional, typed link between two posted entries.
+// It is append-only with composite identity (FromEntry, ToEntry); a wrong
+// relation is corrected by appending another relation, not by editing the row.
+// Amount is reserved in the data model for partial relations (e.g. partial
+// reversals) but the validator rejects non-zero values until a future intent
+// needs them.
+type JournalRelation struct {
+	FromEntry string              `json:"from_entry"`
+	ToEntry   string              `json:"to_entry"`
+	Type      JournalRelationType `json:"type"`
+	Reason    RelationReason      `json:"reason,omitempty"`
+	Amount    int64               `json:"amount,omitempty"`
+	Note      string              `json:"note,omitempty"`
+}

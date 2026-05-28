@@ -30,10 +30,13 @@ type RejectIntent struct {
 	Reason string `json:"reason"`
 }
 
-// ReverseIntent is the payload of a reverse_journal Intent.
+// ReverseIntent is the payload of a reverse_journal Intent. Reason is the
+// classification stored on the resulting JournalRelation; Note is free-text
+// rationale appended to the reversing entry's description.
 type ReverseIntent struct {
-	EntryID string `json:"entry_id"`
-	Reason  string `json:"reason,omitempty"`
+	EntryID string                    `json:"entry_id"`
+	Reason  accounting.RelationReason `json:"reason"`
+	Note    string                    `json:"note,omitempty"`
 }
 
 // IntentDescriptor is the prompt-facing description of one Intent variant, so
@@ -47,7 +50,7 @@ type IntentDescriptor struct {
 const (
 	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
 
-	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
+	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"<amount_error|account_error|duplicate|customer_cancel|period_end|other>","note":"..."}`
 
 	rejectArgsShape = `{"reason":"<explanation why the request cannot be fulfilled>"}`
 )
@@ -138,10 +141,15 @@ const intentSchemaJSON = `{
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["entry_id", "reason"],
+          "required": ["entry_id", "reason", "note"],
           "properties": {
             "entry_id": { "type": "string", "description": "JE-id of the posted entry to reverse." },
-            "reason": { "type": "string" }
+            "reason": {
+              "type": "string",
+              "enum": ["amount_error", "account_error", "duplicate", "customer_cancel", "period_end", "other"],
+              "description": "Classification of why the entry is being reversed. Pick the most specific code: amount_error (wrong numbers), account_error (wrong account chosen), duplicate (same transaction posted twice), customer_cancel (refund/cancellation), period_end (closing adjustment). Use 'other' only when none of the above fits."
+            },
+            "note": { "type": "string", "description": "State the factual error in one short sentence, in the same language as the original entry's description -- e.g. 'amount should be 95000, not 105000', 'duplicate of JE-0050', 'customer cancelled on 5/15'. Do not restate that a reversal is happening; that is implied. May be empty." }
           }
         }
       ]

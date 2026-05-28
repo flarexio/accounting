@@ -25,7 +25,11 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	original := postOne(t, repo, bus)
 
 	uc := bookkeeping.ReverseJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
-	reversal, err := uc.Handle(ctx, bookkeeping.ReverseIntent{EntryID: original.ID, Reason: "duplicate posting"})
+	reversal, err := uc.Handle(ctx, bookkeeping.ReverseIntent{
+		EntryID: original.ID,
+		Reason:  accounting.ReasonDuplicate,
+		Note:    "duplicate posting",
+	})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
@@ -37,7 +41,7 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 		t.Fatalf("expected description to record the reversal, got %q", reversal.Description)
 	}
 	if !strings.Contains(reversal.Description, "duplicate posting") {
-		t.Fatalf("expected the reason in the description, got %q", reversal.Description)
+		t.Fatalf("expected the note in the description, got %q", reversal.Description)
 	}
 	if len(reversal.Lines) != len(original.Lines) {
 		t.Fatalf("expected %d lines, got %d", len(original.Lines), len(reversal.Lines))
@@ -58,6 +62,33 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	}
 	if len(stored) != 2 {
 		t.Fatalf("expected the original and the reversal stored, got %d entries", len(stored))
+	}
+
+	relations, err := repo.RelationsTo(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("RelationsTo: %v", err)
+	}
+	if len(relations) != 1 {
+		t.Fatalf("expected one relation pointing at the original, got %d", len(relations))
+	}
+	rel := relations[0]
+	if rel.FromEntry != reversal.ID {
+		t.Fatalf("relation from_entry %q, want %q", rel.FromEntry, reversal.ID)
+	}
+	if rel.ToEntry != original.ID {
+		t.Fatalf("relation to_entry %q, want %q", rel.ToEntry, original.ID)
+	}
+	if rel.Type != accounting.RelationReverses {
+		t.Fatalf("relation type %q, want %q", rel.Type, accounting.RelationReverses)
+	}
+	if rel.Reason != accounting.ReasonDuplicate {
+		t.Fatalf("relation reason %q, want %q", rel.Reason, accounting.ReasonDuplicate)
+	}
+	if rel.Note != "duplicate posting" {
+		t.Fatalf("relation note %q, want %q", rel.Note, "duplicate posting")
+	}
+	if rel.Amount != 0 {
+		t.Fatalf("relation amount %d, want 0 (full reversal)", rel.Amount)
 	}
 }
 

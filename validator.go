@@ -123,3 +123,84 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 
 	return errors.Join(errs...)
 }
+
+// ValidateRelation enforces relation invariants for rel. fromEntry is the
+// source entry the relation links from; it is passed separately because it
+// may not yet be persisted at validation time (e.g. a reversal is validated
+// before its own entry has been applied to the projection).
+func (v Validator) ValidateRelation(ctx context.Context, rel JournalRelation, fromEntry JournalEntry) error {
+	if v.Repo == nil {
+		return errors.New("accounting: validator has no repository")
+	}
+	if fromEntry.ID == "" || fromEntry.ID != rel.FromEntry {
+		return fmt.Errorf("accounting: from_entry %q does not match provided entry %q", rel.FromEntry, fromEntry.ID)
+	}
+
+	var errs []error
+
+	switch rel.Type {
+	case RelationReverses, RelationCorrects, RelationSettles, RelationCloses, RelationAdjusts:
+	case "":
+		errs = append(errs, errors.New("type is required"))
+	default:
+		errs = append(errs, fmt.Errorf("type %q is not a known relation kind", rel.Type))
+	}
+
+	if rel.Amount < 0 {
+		errs = append(errs, fmt.Errorf("amount must be non-negative, got %d", rel.Amount))
+	}
+	if rel.Amount > 0 {
+		errs = append(errs, errors.New("partial relations (amount > 0) are reserved but not yet supported"))
+	}
+
+	if rel.ToEntry == "" {
+		errs = append(errs, errors.New("to_entry is required"))
+		return errors.Join(errs...)
+	}
+	if rel.FromEntry == rel.ToEntry {
+		errs = append(errs, errors.New("from_entry must differ from to_entry"))
+	}
+
+	to, ok, err := v.Repo.Entry(ctx, rel.ToEntry)
+	if err != nil {
+		return fmt.Errorf("accounting: load to_entry %q: %w", rel.ToEntry, err)
+	}
+	if !ok {
+		errs = append(errs, fmt.Errorf("to_entry %q is not in the ledger", rel.ToEntry))
+		return errors.Join(errs...)
+	}
+
+	if fromEntry.PostedAt.Before(to.PostedAt) {
+		errs = append(errs, fmt.Errorf("from_entry posted %s precedes to_entry posted %s", fromEntry.PostedAt, to.PostedAt))
+	}
+
+	if rel.Type == RelationReverses && rel.Amount == 0 {
+		if err := validateReversalMirror(fromEntry, to); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// validateReversalMirror checks that from's lines are the line-by-line mirror
+// of to's lines: same account, amount, and branch_id, with the side flipped.
+func validateReversalMirror(from, to JournalEntry) error {
+	if len(from.Lines) != len(to.Lines) {
+		return fmt.Errorf("expected %d mirror lines, got %d", len(to.Lines), len(from.Lines))
+	}
+	for i, fl := range from.Lines {
+		tl := to.Lines[i]
+		switch {
+		case fl.AccountCode != tl.AccountCode:
+			return fmt.Errorf("line[%d]: account_code mismatch (%q vs %q)", i, fl.AccountCode, tl.AccountCode)
+		case fl.Amount != tl.Amount:
+			return fmt.Errorf("line[%d]: amount mismatch (%d vs %d)", i, fl.Amount, tl.Amount)
+		case fl.Dimensions.BranchID != tl.Dimensions.BranchID:
+			return fmt.Errorf("line[%d]: branch_id mismatch (%q vs %q)", i, fl.Dimensions.BranchID, tl.Dimensions.BranchID)
+		case fl.Side == tl.Side:
+			return fmt.Errorf("line[%d]: side not flipped (both %q)", i, fl.Side)
+		}
+	}
+	return nil
+}
