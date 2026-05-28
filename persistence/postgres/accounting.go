@@ -36,43 +36,39 @@ func NewAccountingRepository(ctx context.Context, dsn string, embedder accountin
 }
 
 func (r *accountingRepository) Company(ctx context.Context) (accounting.Company, bool, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2`)
+	rows, err := r.q.ListCompanies(ctx)
 	if err != nil {
-		return accounting.Company{}, false, fmt.Errorf("postgres: Company: %w", err)
+		return accounting.Company{}, false, fmt.Errorf("postgres: ListCompanies: %w", err)
 	}
-	defer rows.Close()
-	var companies []accounting.Company
-	for rows.Next() {
-		var c accounting.Company
-		if err := rows.Scan(&c.ID, &c.Name, &c.TimeZone, &c.RetainedEarningsCode); err != nil {
-			return accounting.Company{}, false, fmt.Errorf("postgres: scan company: %w", err)
-		}
-		companies = append(companies, c)
-	}
-	if err := rows.Err(); err != nil {
-		return accounting.Company{}, false, fmt.Errorf("postgres: iterate companies: %w", err)
-	}
-	switch len(companies) {
+	switch len(rows) {
 	case 0:
 		return accounting.Company{}, false, nil
 	case 1:
-		return companies[0], true, nil
+		return companyFromRow(rows[0]), true, nil
 	default:
-		return accounting.Company{}, false, fmt.Errorf("postgres: expected single company, found %d", len(companies))
+		return accounting.Company{}, false, fmt.Errorf("postgres: expected single company, found %d", len(rows))
 	}
 }
 
 func (r *accountingRepository) SetCompany(ctx context.Context, c accounting.Company) error {
-	if _, err := r.pool.Exec(ctx, `
-INSERT INTO companies (id, name, timezone, retained_earnings_code) VALUES ($1, $2, $3, $4)
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    timezone = EXCLUDED.timezone,
-    retained_earnings_code = EXCLUDED.retained_earnings_code
-`, c.ID, c.Name, c.TimeZone, c.RetainedEarningsCode); err != nil {
-		return fmt.Errorf("postgres: SetCompany: %w", err)
+	if err := r.q.UpsertCompany(ctx, pgstore.UpsertCompanyParams{
+		ID:                   c.ID,
+		Name:                 c.Name,
+		Timezone:             c.TimeZone,
+		RetainedEarningsCode: c.RetainedEarningsCode,
+	}); err != nil {
+		return fmt.Errorf("postgres: UpsertCompany: %w", err)
 	}
 	return nil
+}
+
+func companyFromRow(row pgstore.Company) accounting.Company {
+	return accounting.Company{
+		ID:                   row.ID,
+		Name:                 row.Name,
+		TimeZone:             row.Timezone,
+		RetainedEarningsCode: row.RetainedEarningsCode,
+	}
 }
 
 func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {

@@ -28,6 +28,9 @@ type Querier interface {
 	InsertRelation(ctx context.Context, arg InsertRelationParams) error
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListBranches(ctx context.Context) ([]Branch, error)
+	// LIMIT 2 so the Go caller can defensively detect the >1 row invariant
+	// violation that the domain singleton rule forbids.
+	ListCompanies(ctx context.Context) ([]Company, error)
 	ListEntries(ctx context.Context) ([]JournalEntry, error)
 	ListEntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error)
 	ListEntryLines(ctx context.Context, entryID string) ([]JournalLine, error)
@@ -38,6 +41,7 @@ type Querier interface {
 	UpdatePeriodStatus(ctx context.Context, arg UpdatePeriodStatusParams) (int64, error)
 	UpsertAccount(ctx context.Context, arg UpsertAccountParams) error
 	UpsertBranch(ctx context.Context, arg UpsertBranchParams) error
+	UpsertCompany(ctx context.Context, arg UpsertCompanyParams) error
 	UpsertLastSequence(ctx context.Context, arg UpsertLastSequenceParams) error
 	UpsertPeriod(ctx context.Context, arg UpsertPeriodParams) error
 }

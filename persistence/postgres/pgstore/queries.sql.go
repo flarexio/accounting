@@ -272,6 +272,37 @@ func (q *Queries) ListBranches(ctx context.Context) ([]Branch, error) {
 	return items, nil
 }
 
+const listCompanies = `-- name: ListCompanies :many
+SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2
+`
+
+// LIMIT 2 so the Go caller can defensively detect the >1 row invariant
+// violation that the domain singleton rule forbids.
+func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
+	rows, err := q.db.Query(ctx, listCompanies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Company
+	for rows.Next() {
+		var i Company
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Timezone,
+			&i.RetainedEarningsCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntries = `-- name: ListEntries :many
 SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
@@ -571,6 +602,32 @@ type UpsertBranchParams struct {
 
 func (q *Queries) UpsertBranch(ctx context.Context, arg UpsertBranchParams) error {
 	_, err := q.db.Exec(ctx, upsertBranch, arg.ID, arg.Name, arg.Position)
+	return err
+}
+
+const upsertCompany = `-- name: UpsertCompany :exec
+INSERT INTO companies (id, name, timezone, retained_earnings_code)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    timezone = EXCLUDED.timezone,
+    retained_earnings_code = EXCLUDED.retained_earnings_code
+`
+
+type UpsertCompanyParams struct {
+	ID                   string
+	Name                 string
+	Timezone             string
+	RetainedEarningsCode string
+}
+
+func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) error {
+	_, err := q.db.Exec(ctx, upsertCompany,
+		arg.ID,
+		arg.Name,
+		arg.Timezone,
+		arg.RetainedEarningsCode,
+	)
 	return err
 }
 
