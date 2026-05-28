@@ -310,6 +310,42 @@ func (q *Queries) ListEntries(ctx context.Context) ([]JournalEntry, error) {
 	return items, nil
 }
 
+const listEntriesByPeriod = `-- name: ListEntriesByPeriod :many
+SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+FROM journal_entries
+WHERE period_id = $1
+ORDER BY sequence
+`
+
+func (q *Queries) ListEntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error) {
+	rows, err := q.db.Query(ctx, listEntriesByPeriod, periodID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JournalEntry
+	for rows.Next() {
+		var i JournalEntry
+		if err := rows.Scan(
+			&i.ID,
+			&i.Sequence,
+			&i.Subject,
+			&i.EntryDate,
+			&i.PeriodID,
+			&i.Currency,
+			&i.Description,
+			&i.PostedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntryLines = `-- name: ListEntryLines :many
 SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
 FROM journal_lines

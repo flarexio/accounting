@@ -27,6 +27,7 @@ func newApp(stdout, stderr io.Writer) *cli.Command {
 		Commands: []*cli.Command{
 			newBookRunCommand(stdout),
 			newBenchCommand(stdout),
+			newCloseCommand(stdout),
 			newSeedCommand(stdout),
 			newTUICommand(),
 		},

@@ -29,6 +29,7 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListBranches(ctx context.Context) ([]Branch, error)
 	ListEntries(ctx context.Context) ([]JournalEntry, error)
+	ListEntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error)
 	ListEntryLines(ctx context.Context, entryID string) ([]JournalLine, error)
 	ListLinesForEntries(ctx context.Context, dollar_1 []string) ([]JournalLine, error)
 	ListPeriods(ctx context.Context) ([]Period, error)
