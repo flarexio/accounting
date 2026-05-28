@@ -81,45 +81,20 @@ ledger tui
 
 ### Scheduling closings
 
-`ledger close` is rule-driven and meant to be invoked by an external scheduler — cron, a systemd timer, or a kubernetes `CronJob` — once a period has ended in the company's timezone. The use case itself is idempotent, so safe retries are part of the design.
+`ledger close` is rule-driven and meant to be invoked by an external scheduler once a period has ended in the company's timezone. The use case itself is idempotent, so safe retries are part of the design.
 
-Example k8s `CronJob` that closes the previous calendar month at 02:00 UTC on the first of each month (Asia/Taipei = UTC+8, so 02:00 UTC is 10:00 local; well after the period boundary):
+Example `crontab` entry that closes the previous calendar month at 02:00 on the first of each month, with stdout/stderr captured to a log:
 
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: ledger-close-monthly
-spec:
-  schedule: "0 2 1 * *"  # 02:00 UTC on the 1st of every month
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      backoffLimit: 3
-      template:
-        spec:
-          restartPolicy: OnFailure
-          containers:
-            - name: ledger
-              image: flarexio/ledger:latest
-              args:
-                - close
-                - --period
-                - $(PERIOD_ID)
-              env:
-                - name: PERIOD_ID
-                  value: "2026-05"  # supply the period id out-of-band
-              volumeMounts:
-                - name: workdir
-                  mountPath: /root/.flarex/accounting
-          volumes:
-            - name: workdir
-              secret:
-                secretName: ledger-config
+```cron
+# m h dom mon dow  command
+  0 2  1   *   *   /usr/local/bin/ledger close --period "$(date -d 'yesterday' +\%Y-\%m)" >> /var/log/ledger-close.log 2>&1
 ```
 
-For a systemd timer, point a `.service` unit at `ledger close --period <id>` and pair it with a `.timer` unit at `OnCalendar=monthly`. Either way, `Period.ID` is supplied out-of-band; `ledger close` does not infer it from the wall clock.
+A few notes:
+
+- The cron daemon runs in its own timezone (often UTC or the system local zone). `ledger close` reads `Company.TimeZone` from the seeded company and refuses to close until `Period.End` has actually passed in *that* zone — schedule a few hours after midnight in the company's zone to be safe.
+- `Period.ID` is supplied by the cron line (here derived from `date -d 'yesterday'`); `ledger close` does not infer it from the wall clock.
+- The user running cron needs the same `~/.flarex/accounting/config.yaml` as interactive runs. For system-wide scheduling, put the config under that user's home or pass `--work-dir <dir>`.
 
 ## Configuration
 
