@@ -36,6 +36,12 @@ type LedgerRepository interface {
 	// bumps LastSequence for evt.Subject atomically.
 	Apply(ctx context.Context, evt JournalPosted) error
 
+	// ApplyPeriodClosure flips evt.Period.Status to closed and bumps
+	// LastSequence for evt.Subject atomically. This is the only path a
+	// period transitions from open to closed in the projection at runtime;
+	// PutPeriod is reserved for seed-time reference-data setup.
+	ApplyPeriodClosure(ctx context.Context, evt PeriodClosure) error
+
 	// LastSequence returns the broker sequence of the most recent applied
 	// JournalPosted on subject, or 0 when none has been seen.
 	LastSequence(ctx context.Context, subject string) (uint64, error)

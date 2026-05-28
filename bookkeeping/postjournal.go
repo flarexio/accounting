@@ -15,6 +15,9 @@ import (
 // SubjectLedger is the default Subject JournalPosted events are published on.
 const SubjectLedger = "accounting.journal"
 
+// SubjectPeriodClosure is the Subject PeriodClosure events are published on.
+const SubjectPeriodClosure = "accounting.period.closure"
+
 // Clock returns the time a posted entry is stamped with; tests inject a fake.
 type Clock func() time.Time
 

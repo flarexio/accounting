@@ -512,6 +512,23 @@ func (q *Queries) ListRelationsTo(ctx context.Context, toEntry string) ([]Journa
 	return items, nil
 }
 
+const updatePeriodStatus = `-- name: UpdatePeriodStatus :execrows
+UPDATE periods SET status = $2 WHERE id = $1
+`
+
+type UpdatePeriodStatusParams struct {
+	ID     string
+	Status string
+}
+
+func (q *Queries) UpdatePeriodStatus(ctx context.Context, arg UpdatePeriodStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePeriodStatus, arg.ID, arg.Status)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertAccount = `-- name: UpsertAccount :exec
 INSERT INTO accounts (code, name, type, active)
 VALUES ($1, $2, $3, $4)
