@@ -193,13 +193,11 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: load entries: %w", err)
 	}
 
-	type accountBalance struct {
-		code string
-		typ  accounting.AccountType
-		net  int64 // sum_debit - sum_credit (positive => debit balance)
-	}
+	// per-branch aggregation: account_code -> net (sum_debit - sum_credit;
+	// positive means debit balance), plus the set of source entry ids that
+	// contributed.
 	type branchAggregate struct {
-		balances map[string]*accountBalance
+		balances map[string]int64
 		sources  map[string]struct{}
 	}
 	branches := map[string]*branchAggregate{}
@@ -216,21 +214,16 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 			agg := branches[line.Dimensions.BranchID]
 			if agg == nil {
 				agg = &branchAggregate{
-					balances: map[string]*accountBalance{},
+					balances: map[string]int64{},
 					sources:  map[string]struct{}{},
 				}
 				branches[line.Dimensions.BranchID] = agg
 			}
-			bal := agg.balances[line.AccountCode]
-			if bal == nil {
-				bal = &accountBalance{code: line.AccountCode, typ: t}
-				agg.balances[line.AccountCode] = bal
-			}
 			switch line.Side {
 			case accounting.SideDebit:
-				bal.net += line.Amount
+				agg.balances[line.AccountCode] += line.Amount
 			case accounting.SideCredit:
-				bal.net -= line.Amount
+				agg.balances[line.AccountCode] -= line.Amount
 			}
 			agg.sources[entry.ID] = struct{}{}
 		}
@@ -251,8 +244,8 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 	for _, branchID := range branchIDs {
 		agg := branches[branchID]
 		codes := make([]string, 0, len(agg.balances))
-		for code, bal := range agg.balances {
-			if bal.net != 0 {
+		for code, net := range agg.balances {
+			if net != 0 {
 				codes = append(codes, code)
 			}
 		}
@@ -264,27 +257,27 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 		var lines []accounting.JournalLine
 		var plug int64 // signed: positive = retained earnings ends up CR (net income)
 		for _, code := range codes {
-			bal := agg.balances[code]
+			net := agg.balances[code]
 			// Net debit balance (>0) closes via CREDIT; net credit balance (<0) closes via DEBIT.
-			if bal.net > 0 {
+			if net > 0 {
 				lines = append(lines, accounting.JournalLine{
 					AccountCode: code,
 					Side:        accounting.SideCredit,
-					Amount:      bal.net,
+					Amount:      net,
 					Dimensions:  accounting.Dimensions{BranchID: branchID},
 				})
 			} else {
 				lines = append(lines, accounting.JournalLine{
 					AccountCode: code,
 					Side:        accounting.SideDebit,
-					Amount:      -bal.net,
+					Amount:      -net,
 					Dimensions:  accounting.Dimensions{BranchID: branchID},
 				})
 			}
 			// Posting the opposite side on Retained Earnings keeps the entry
-			// balanced; -bal.net is that side's signed magnitude regardless of
+			// balanced; -net is that side's signed magnitude regardless of
 			// whether the account is revenue or expense.
-			plug -= bal.net
+			plug -= net
 		}
 		// plug = net income contribution from this branch: positive => CR Retained Earnings.
 		if plug == 0 {
