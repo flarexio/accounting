@@ -87,9 +87,6 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	if rel.Note != "duplicate posting" {
 		t.Fatalf("relation note %q, want %q", rel.Note, "duplicate posting")
 	}
-	if rel.Amount != 0 {
-		t.Fatalf("relation amount %d, want 0 (full reversal)", rel.Amount)
-	}
 }
 
 func TestReverseJournal_RejectsUnknownEntry(t *testing.T) {

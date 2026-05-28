@@ -54,7 +54,6 @@ type JournalRelation struct {
 	ToEntry   string
 	Type      string
 	Reason    string
-	Amount    int64
 	Note      string
 }
 
