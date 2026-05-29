@@ -176,21 +176,3 @@ go test ./...
 ```
 
 Do not place the Go build cache inside this repository.
-
-### Integration tests
-
-Tests gated behind `//go:build integration` exercise the real Postgres + NATS
-JetStream path end-to-end (the publish → durable consumer → projection write
-flow that unit tests stub out with the inproc bus and memory adapter). They
-expect the local `compose.yaml` stack to be running:
-
-```bash
-docker compose up -d
-migrate -path persistence/postgres/migrations \
-  -database "postgres://stoa:stoa@localhost:5432/accounting?sslmode=disable" up
-go test -tags=integration ./cmd/ledger/...
-```
-
-`ACCOUNTING_TEST_POSTGRES_DSN` and `ACCOUNTING_TEST_NATS_URL` override the
-default compose endpoints if you point the stack elsewhere. Each run isolates
-itself under a unique company id and cleans up the rows it wrote on success.
