@@ -38,10 +38,9 @@ func seededLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventB
 		t.Fatalf("seed: %v", err)
 	}
 	bus := inproc.NewAccountingBus()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo})
+	if err := bus.Subscribe(router); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 	return repo, bus

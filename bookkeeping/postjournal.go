@@ -12,19 +12,13 @@ import (
 	"github.com/flarexio/accounting"
 )
 
-// SubjectLedger is the default Subject JournalPosted events are published on.
-const SubjectLedger = "accounting.journal"
-
-// SubjectPeriodClosure is the Subject PeriodClosure events are published on.
-const SubjectPeriodClosure = "accounting.period.closure"
-
 // Clock returns the time a posted entry is stamped with; tests inject a fake.
 type Clock func() time.Time
 
 // PostJournal is the "post a journal entry" use case.
 type PostJournal struct {
 	Repo      accounting.LedgerRepository
-	Publisher EventPublisher
+	Publisher Publisher
 	Clock     Clock
 	Subject   string
 }
@@ -46,7 +40,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 
 	subject := uc.Subject
 	if subject == "" {
-		subject = SubjectLedger
+		subject = accounting.SubjectJournalPosted
 	}
 	clock := uc.Clock
 	if clock == nil {
@@ -77,7 +71,11 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 	if err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publish: %w", err)
 	}
-	return dispatched.Entry, nil
+	posted, ok := dispatched.(accounting.JournalPosted)
+	if !ok {
+		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publisher returned %T, want JournalPosted", dispatched)
+	}
+	return posted.Entry, nil
 }
 
 // Handle validates intent and, if clean, executes it.

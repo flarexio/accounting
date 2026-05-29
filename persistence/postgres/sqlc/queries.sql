@@ -1,3 +1,16 @@
+-- name: ListCompanies :many
+-- LIMIT 2 so the Go caller can defensively detect the >1 row invariant
+-- violation that the domain singleton rule forbids.
+SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2;
+
+-- name: UpsertCompany :exec
+INSERT INTO companies (id, name, timezone, retained_earnings_code)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    timezone = EXCLUDED.timezone,
+    retained_earnings_code = EXCLUDED.retained_earnings_code;
+
 -- name: GetAccount :one
 SELECT code, name, type, active
 FROM accounts

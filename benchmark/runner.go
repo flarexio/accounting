@@ -190,10 +190,9 @@ func (r *Runner) runIteration(ctx context.Context, c *Case, m ModelConfig, itera
 
 	bus := inproc.NewAccountingBus()
 	defer bus.Close()
-	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})
-	if err := bus.Subscribe(apply); err != nil {
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo})
+	if err := bus.Subscribe(router); err != nil {
 		rr.Error = fmt.Errorf("subscribe: %w", err).Error()
 		return rr
 	}

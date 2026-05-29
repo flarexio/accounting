@@ -34,9 +34,9 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 	evt.Sequence = 42
 	evt.Entry.ID = "JE-0042"
 
-	body, err := encodeAccountingEvent(evt)
+	body, err := encodeEvent(evt)
 	if err != nil {
-		t.Fatalf("encodeAccountingEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
 
 	var raw map[string]json.RawMessage
@@ -58,13 +58,13 @@ func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(7)
 
-	body, err := encodeAccountingEvent(in)
+	body, err := encodeEvent(in)
 	if err != nil {
-		t.Fatalf("encodeAccountingEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := decodeAccountingEvent(body, "accounting.journal", 7)
+	got, err := decodeJournalPosted(body, "accounting.journal", 7)
 	if err != nil {
-		t.Fatalf("decodeAccountingEvent: %v", err)
+		t.Fatalf("decodeJournalPosted: %v", err)
 	}
 	if got.Subject != "accounting.journal" {
 		t.Errorf("subject: got %q", got.Subject)
@@ -87,7 +87,16 @@ func TestStampPubAck_StampsSubjectSequenceWithoutTouchingEntryID(t *testing.T) {
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(99)
 
-	stamped := stampAccountingPubAck(in, "accounting.journal", 99)
+	// Re-encode and decode in.body to verify subject/sequence stamping
+	// without touching Entry.ID; this is the path the consume loop takes.
+	body, err := encodeJournalPosted(in)
+	if err != nil {
+		t.Fatalf("encodeJournalPosted: %v", err)
+	}
+	stamped, err := decodeJournalPosted(body, "accounting.journal", 99)
+	if err != nil {
+		t.Fatalf("decodeJournalPosted: %v", err)
+	}
 	if stamped.Subject != "accounting.journal" || stamped.Sequence != 99 {
 		t.Errorf("metadata not stamped: %+v", stamped)
 	}
@@ -121,13 +130,13 @@ func TestEncodeDecode_RoundTripPreservesTags(t *testing.T) {
 	evt := sampleEvent()
 	evt.Entry.Lines[0].Dimensions.Tags = map[string]string{"project": "atlas"}
 
-	body, err := encodeAccountingEvent(evt)
+	body, err := encodeEvent(evt)
 	if err != nil {
-		t.Fatalf("encodeAccountingEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := decodeAccountingEvent(body, "accounting.journal", 1)
+	got, err := decodeJournalPosted(body, "accounting.journal", 1)
 	if err != nil {
-		t.Fatalf("decodeAccountingEvent: %v", err)
+		t.Fatalf("decodeJournalPosted: %v", err)
 	}
 	if got.Entry.Lines[0].Dimensions.Tags["project"] != "atlas" {
 		t.Errorf("tag round-trip lost: %+v", got.Entry.Lines[0].Dimensions.Tags)

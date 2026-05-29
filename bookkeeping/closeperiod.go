@@ -31,7 +31,7 @@ type ClosePeriodResult struct {
 // closed. Re-invoking against an already-closed period is a no-op.
 type ClosePeriod struct {
 	Repo      accounting.LedgerRepository
-	Publisher EventPublisher
+	Publisher Publisher
 	Clock     Clock
 	Subject   string
 }
@@ -67,24 +67,24 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 		if err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish: %w", err)
 		}
-		posted = append(posted, dispatched.Entry)
+		out, ok := dispatched.(accounting.JournalPosted)
+		if !ok {
+			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publisher returned %T, want JournalPosted", dispatched)
+		}
+		posted = append(posted, out.Entry)
 	}
 
 	if period.Status != accounting.PeriodClosed {
-		closurePub, ok := uc.Publisher.(PeriodClosurePublisher)
-		if !ok {
-			return ClosePeriodResult{}, errors.New("bookkeeping: publisher does not support period closure events")
-		}
 		closedPeriod := period
 		closedPeriod.Status = accounting.PeriodClosed
-		lastClosureSeq, err := uc.Repo.LastSequence(ctx, SubjectPeriodClosure)
+		lastClosureSeq, err := uc.Repo.LastSequence(ctx, accounting.SubjectPeriodClosure)
 		if err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: read period-closure sequence: %w", err)
 		}
-		if _, err := closurePub.PublishPeriodClosure(ctx, accounting.PeriodClosure{
+		if _, err := uc.Publisher.Publish(ctx, accounting.PeriodClosure{
 			Period: closedPeriod,
 		}, accounting.ExpectedSequence{
-			Subject: SubjectPeriodClosure,
+			Subject: accounting.SubjectPeriodClosure,
 			LastSeq: lastClosureSeq,
 		}); err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish period closure: %w", err)
@@ -110,10 +110,11 @@ func (uc ClosePeriod) now() time.Time {
 	return uc.Clock()
 }
 
-// subject resolves the publish subject; empty Subject falls back to SubjectLedger.
+// subject resolves the publish subject; empty Subject falls back to the
+// canonical accounting.SubjectJournalPosted.
 func (uc ClosePeriod) subject() string {
 	if uc.Subject == "" {
-		return SubjectLedger
+		return accounting.SubjectJournalPosted
 	}
 	return uc.Subject
 }

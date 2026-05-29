@@ -22,7 +22,7 @@ type Registry struct {
 
 // NewBookkeepingRegistry wires every accounting use case against the shared
 // ledger repository and event publisher. The kinds it routes match Intents().
-func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub EventPublisher, clock Clock, subject string) Registry {
+func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub Publisher, clock Clock, subject string) Registry {
 	post := PostJournal{Repo: repo, Publisher: pub, Clock: clock, Subject: subject}
 	reverse := ReverseJournal{Repo: repo, Publisher: pub, Clock: clock, Subject: subject}
 

@@ -5,6 +5,12 @@ import (
 	"fmt"
 )
 
+// SubjectJournalPosted is the bus subject JournalPosted events are published on.
+const SubjectJournalPosted = "accounting.journal"
+
+// SubjectPeriodClosure is the bus subject PeriodClosure events are published on.
+const SubjectPeriodClosure = "accounting.period.closure"
+
 // JournalPosted is the domain event emitted after a JournalIntent has been
 // validated and the broker has accepted it. Subject and Sequence are
 // transport-assigned and excluded from JSON; Entry.ID is producer-assigned and
@@ -18,17 +24,22 @@ type JournalPosted struct {
 	Relations []JournalRelation `json:"relations,omitempty"`
 }
 
+// EventSubject reports the bus subject JournalPosted lives on.
+func (JournalPosted) EventSubject() string { return SubjectJournalPosted }
+
 // PeriodClosure is the domain event emitted by ClosePeriod after every
-// closing entry for the period has been published. The subscribed
-// ApplyPeriodClosure handler is the only writer that flips Period.Status to
-// closed in the projection, so this is the event-sourced counterpart of
-// JournalPosted for period state transitions. Subject and Sequence are
-// transport-assigned.
+// closing entry for the period has been published. The subscribed handler is
+// the only writer that flips Period.Status to closed in the projection, so
+// this is the event-sourced counterpart of JournalPosted for period state
+// transitions. Subject and Sequence are transport-assigned.
 type PeriodClosure struct {
 	Subject  string `json:"-"`
 	Sequence uint64 `json:"-"`
 	Period   Period `json:"period"`
 }
+
+// EventSubject reports the bus subject PeriodClosure lives on.
+func (PeriodClosure) EventSubject() string { return SubjectPeriodClosure }
 
 // FormatEntryID formats a per-subject counter into the canonical JournalEntry.ID.
 func FormatEntryID(seq uint64) string {
