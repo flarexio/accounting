@@ -22,9 +22,10 @@ type Branch struct {
 }
 
 type Company struct {
-	ID       string
-	Name     string
-	Timezone string
+	ID                   string
+	Name                 string
+	Timezone             string
+	RetainedEarningsCode string
 }
 
 type JournalEntry struct {

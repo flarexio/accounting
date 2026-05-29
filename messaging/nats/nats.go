@@ -31,12 +31,14 @@ type Config struct {
 	AckWait  time.Duration
 }
 
-// bus owns the NATS connection, JetStream context, consumer, and consume loop.
-// Same-package domain factories add encoding and port adaptation on top.
+// bus owns the NATS connection, JetStream context, durable consumer, and
+// consume loop. One consumer fans every filtered subject in stream order
+// through a single ack cursor; same-package domain factories add encoding,
+// per-subject dispatch, and port adaptation on top.
 type bus struct {
 	nc       *nats.Conn
 	js       jetstream.JetStream
-	subject  string
+	subjects []string
 	consumer jetstream.Consumer
 	ackWait  time.Duration
 
@@ -45,14 +47,16 @@ type bus struct {
 }
 
 // connect opens NATS, attaches JetStream, and ensures the stream (bound to
-// streamSubject) and durable consumer (filtering on subject) named in cfg
-// exist before returning.
-func connect(ctx context.Context, cfg Config, subject, streamSubject string) (*bus, error) {
+// streamSubject) and one durable consumer (filtering on every subject in
+// subjects) named in cfg exist before returning. Using a single consumer with
+// FilterSubjects is deliberate: separate consumers per subject would track
+// independent cursors and break the global ack order between subjects.
+func connect(ctx context.Context, cfg Config, subjects []string, streamSubject string) (*bus, error) {
 	if cfg.URL == "" || cfg.Stream == "" || cfg.Consumer == "" {
 		return nil, errors.New("nats: url, stream, and consumer are required")
 	}
-	if subject == "" || streamSubject == "" {
-		return nil, errors.New("nats: subject and stream subject are required")
+	if len(subjects) == 0 || streamSubject == "" {
+		return nil, errors.New("nats: at least one subject and a stream subject are required")
 	}
 	ackWait := cfg.AckWait
 	if ackWait <= 0 {
@@ -77,11 +81,11 @@ func connect(ctx context.Context, cfg Config, subject, streamSubject string) (*b
 		return nil, fmt.Errorf("nats: ensure stream %q: %w", cfg.Stream, err)
 	}
 	cons, err := js.CreateOrUpdateConsumer(ctx, cfg.Stream, jetstream.ConsumerConfig{
-		Durable:       cfg.Consumer,
-		FilterSubject: subject,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverAllPolicy,
-		AckWait:       ackWait,
+		Durable:        cfg.Consumer,
+		FilterSubjects: subjects,
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		DeliverPolicy:  jetstream.DeliverAllPolicy,
+		AckWait:        ackWait,
 	})
 	if err != nil {
 		nc.Close()
@@ -90,16 +94,16 @@ func connect(ctx context.Context, cfg Config, subject, streamSubject string) (*b
 	return &bus{
 		nc:       nc,
 		js:       js,
-		subject:  subject,
+		subjects: subjects,
 		consumer: cons,
 		ackWait:  ackWait,
 	}, nil
 }
 
-// publishRaw publishes body to the configured subject and returns the
-// broker-assigned stream sequence.
-func (b *bus) publishRaw(ctx context.Context, body []byte, opts ...jetstream.PublishOpt) (uint64, error) {
-	ack, err := b.js.Publish(ctx, b.subject, body, opts...)
+// publishRaw publishes body to subject and returns the broker-assigned stream
+// sequence.
+func (b *bus) publishRaw(ctx context.Context, subject string, body []byte, opts ...jetstream.PublishOpt) (uint64, error) {
+	ack, err := b.js.Publish(ctx, subject, body, opts...)
 	if err != nil {
 		return 0, err
 	}

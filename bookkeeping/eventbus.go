@@ -7,61 +7,81 @@ import (
 	"github.com/flarexio/accounting"
 )
 
-// EventPublisher publishes a JournalPosted through a transport, which assigns
-// Subject and Sequence. Callers use the returned event when they need the
-// broker-assigned identifiers.
-type EventPublisher interface {
-	Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error)
+// Event is the polymorphic envelope every transport publishes and delivers.
+// Concrete events (accounting.JournalPosted, accounting.PeriodClosure) carry
+// their own payloads; EventSubject names the bus subject the event lives on
+// so a publisher can route by it without case-switching on the concrete type.
+type Event interface {
+	EventSubject() string
 }
 
-// EventHandler consumes a JournalPosted, typically projecting it into a
-// LedgerRepository.
+// EventHandler consumes a delivered Event of the type bound to its registered
+// subject. The Router guarantees that handler only receives events whose
+// subject matches its registration, so the implementation may type-assert
+// without a fallback switch.
 type EventHandler interface {
-	Handle(ctx context.Context, evt accounting.JournalPosted) error
+	Handle(ctx context.Context, evt Event) error
 }
 
 // EventHandlerFunc adapts an ordinary function to EventHandler.
-type EventHandlerFunc func(ctx context.Context, evt accounting.JournalPosted) error
+type EventHandlerFunc func(ctx context.Context, evt Event) error
 
-func (f EventHandlerFunc) Handle(ctx context.Context, evt accounting.JournalPosted) error {
+func (f EventHandlerFunc) Handle(ctx context.Context, evt Event) error {
 	return f(ctx, evt)
 }
 
-// EventSubscriber registers a handler with a transport, which owns per-message
-// context, ack/nak, and concurrency.
-type EventSubscriber interface {
-	Subscribe(handler EventHandler) error
+// Publisher publishes an Event through a transport, which assigns the
+// broker-side identifiers carried on the returned value.
+type Publisher interface {
+	Publish(ctx context.Context, evt Event, expect accounting.ExpectedSequence) (Event, error)
 }
 
-// PeriodClosurePublisher publishes a PeriodClosure on the dedicated period
-// subject; the transport assigns Subject and Sequence.
-type PeriodClosurePublisher interface {
-	PublishPeriodClosure(ctx context.Context, evt accounting.PeriodClosure, expect accounting.ExpectedSequence) (accounting.PeriodClosure, error)
-}
-
-// PeriodClosureHandler consumes a PeriodClosure, typically by calling
-// LedgerRepository.ApplyPeriodClosure.
-type PeriodClosureHandler interface {
-	HandlePeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error
-}
-
-// PeriodClosureHandlerFunc adapts an ordinary function to PeriodClosureHandler.
-type PeriodClosureHandlerFunc func(ctx context.Context, evt accounting.PeriodClosure) error
-
-func (f PeriodClosureHandlerFunc) HandlePeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error {
-	return f(ctx, evt)
-}
-
-// PeriodClosureSubscriber registers a handler for PeriodClosure events.
-type PeriodClosureSubscriber interface {
-	SubscribePeriodClosure(handler PeriodClosureHandler) error
+// Subscriber installs a Router as the sole subscription point for the bus.
+// A transport calls back into the router on every delivered message to look
+// up the registered handler.
+type Subscriber interface {
+	Subscribe(router *Router) error
 }
 
 // EventBus is the bidirectional transport contract for the bookkeeping flow.
 type EventBus interface {
-	EventPublisher
-	EventSubscriber
-	PeriodClosurePublisher
-	PeriodClosureSubscriber
+	Publisher
+	Subscriber
 	io.Closer
+}
+
+// Router is the per-subject dispatch table the bus consults on every message.
+// Construct one in composition (cmd/ledger/compose.go), register each event
+// type's handler with On, and hand the router to bus.Subscribe; the bus owns
+// the consume loop, the router owns the routing.
+type Router struct {
+	routes map[string]EventHandler
+}
+
+// NewRouter returns an empty Router.
+func NewRouter() *Router {
+	return &Router{routes: map[string]EventHandler{}}
+}
+
+// On registers handler for events whose subject is subject. The last
+// registration wins; the receiver is returned so registrations chain.
+func (r *Router) On(subject string, handler EventHandler) *Router {
+	r.routes[subject] = handler
+	return r
+}
+
+// Handler returns the registered handler for subject, or nil if none is
+// registered. Transports use it to decide whether to ack or nak.
+func (r *Router) Handler(subject string) EventHandler {
+	return r.routes[subject]
+}
+
+// Subjects returns every registered subject; transports use it to drive their
+// broker-side subject filter list.
+func (r *Router) Subjects() []string {
+	out := make([]string, 0, len(r.routes))
+	for s := range r.routes {
+		out = append(out, s)
+	}
+	return out
 }

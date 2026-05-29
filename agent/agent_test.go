@@ -49,9 +49,9 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerReposi
 func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBus {
 	t.Helper()
 	bus := inproc.NewAccountingBus()
-	if err := bus.Subscribe(bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
-		return repo.Apply(ctx, evt)
-	})); err != nil {
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo})
+	if err := bus.Subscribe(router); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 	return bus

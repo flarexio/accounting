@@ -18,7 +18,7 @@ import (
 type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[bookkeeping.Intent]
 	Repo      accounting.LedgerRepository
-	Publisher bookkeeping.EventPublisher
+	Publisher bookkeeping.Publisher
 	Subject   string
 	Clock     bookkeeping.Clock
 	MaxTurns  int
