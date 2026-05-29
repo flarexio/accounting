@@ -1,5 +1,4 @@
--- 0001_schema.down.sql
-
+DROP TABLE IF EXISTS journal_relations;
 DROP TABLE IF EXISTS journal_lines;
 DROP TABLE IF EXISTS journal_entries;
 DROP TABLE IF EXISTS subject_offsets;

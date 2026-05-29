@@ -4,9 +4,6 @@ sql:
     queries: sqlc/queries.sql
     schema:
       - migrations/0001_schema.up.sql
-      - migrations/0003_je_relations.up.sql
-      - migrations/0004_companies_retained_earnings.up.sql
-      - migrations/0005_drop_je_relations_amount.up.sql
     gen:
       go:
         package: pgstore
