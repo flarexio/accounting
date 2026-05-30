@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/bookkeeping"
@@ -15,12 +16,15 @@ import (
 // holds chart snapshots so Render is free of repository I/O on the hot path.
 // OperatorBranchID names the branch the operator is currently working from;
 // the prompt asks the model to default to it when the user doesn't specify.
+// Clock supplies the current instant the prompt reports as "Now"; nil falls
+// back to time.Now().
 type PromptRenderer struct {
 	Company          accounting.Company
 	Accounts         []accounting.Account
 	Periods          []accounting.Period
 	Branches         []accounting.Branch
 	OperatorBranchID string
+	Clock            bookkeeping.Clock
 }
 
 // NewPromptRenderer snapshots the company, chart, periods, and branches from repo.
@@ -84,6 +88,10 @@ func (r PromptRenderer) tenantContext() string {
 	if tz := r.Company.TimeZone; tz != "" {
 		fmt.Fprintf(&b, "Timezone: %s (all dates are business dates in this zone)\n", tz)
 	}
+	now := r.now()
+	loc := r.Company.Location()
+	fmt.Fprintf(&b, "Now: %s; today's date is %s -- use it when the request states no date.\n",
+		now.In(loc).Format("2006-01-02 15:04:05 -07:00"), accounting.DateOf(now, loc))
 
 	if toolMode {
 		b.WriteString("\n")
@@ -195,6 +203,14 @@ func (r PromptRenderer) openPeriods() string {
 	return b.String()
 }
 
+// now resolves the clock to the current instant; nil Clock falls back to time.Now().
+func (r PromptRenderer) now() time.Time {
+	if r.Clock != nil {
+		return r.Clock()
+	}
+	return time.Now()
+}
+
 func (r PromptRenderer) operatorBranchName() string {
 	if r.OperatorBranchID == "" {
 		return ""
@@ -245,7 +261,7 @@ Format rules for post_journal payloads:
       two-decimal currencies (USD, EUR, GBP, ...): cents, e.g. $100 = 10000.
       three-decimal currencies (BHD, KWD, ...): mils, e.g. BHD 1 = 1000.
   - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.
-  - date is the business date in the company's timezone, formatted YYYY-MM-DD (e.g. 2026-05-12), and must fall inside the chosen period.
+  - date is the business date in the company's timezone, formatted YYYY-MM-DD (e.g. 2026-05-12), and must fall inside the chosen period; when the request states no date, use today's date from the company context.
   - every line must carry a branch_id from the reporting branches list; all lines on one entry must share the same branch_id.
   - use one currency throughout.
 `
