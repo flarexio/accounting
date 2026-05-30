@@ -64,6 +64,30 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 	}
 }
 
+func TestPromptRenderer_IncludesNowFromClock(t *testing.T) {
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+	renderer.Clock = fixedClock
+
+	messages, err := renderer.Render(llm.ReasoningInput{Task: "Paid AWS bill"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	system := messages[0].Content
+	for _, want := range []string{
+		"Now: 2026-05-12 09:00:00",
+		"today's date is 2026-05-12",
+	} {
+		if !strings.Contains(system, want) {
+			t.Errorf("system prompt missing %q from clock\n--- prompt ---\n%s", want, system)
+		}
+	}
+}
+
 func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 	_, repo := awsBillScenario(t)
 	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
