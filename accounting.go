@@ -58,12 +58,16 @@ func (c Company) Location() *time.Location {
 }
 
 // Account is one row in the chart of accounts. Inactive accounts cannot be
-// used in new postings.
+// used in new postings. Aliases and Description are semantic-search hints that
+// enrich the indexed text (see AccountEmbeddingText); they carry no posting
+// invariant and the projection persists only the resulting embedding.
 type Account struct {
-	Code   string      `json:"code" yaml:"code"`
-	Name   string      `json:"name" yaml:"name"`
-	Type   AccountType `json:"type" yaml:"type"`
-	Active bool        `json:"active" yaml:"active"`
+	Code        string      `json:"code" yaml:"code"`
+	Name        string      `json:"name" yaml:"name"`
+	Type        AccountType `json:"type" yaml:"type"`
+	Active      bool        `json:"active" yaml:"active"`
+	Aliases     []string    `json:"aliases,omitempty" yaml:"aliases,omitempty"`
+	Description string      `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 // Branch is a reporting dimension within the single ledger. Position drives

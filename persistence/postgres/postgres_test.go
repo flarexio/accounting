@@ -27,7 +27,7 @@ func TestAccountFromRow(t *testing.T) {
 		Type:   accounting.AccountExpense,
 		Active: true,
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("account mismatch:\nwant %+v\n got %+v", want, got)
 	}
 }

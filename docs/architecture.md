@@ -81,7 +81,7 @@ Integration event
 | Concept | Type | Notes |
 | --- | --- | --- |
 | Company | `accounting.Company` | Legal entity that owns the ledger; carries an IANA `TimeZone` (e.g. `Asia/Taipei`) used to interpret business dates. |
-| Chart of accounts | `accounting.Account` | Active accounts can receive new postings. |
+| Chart of accounts | `accounting.Account` | Active accounts can receive new postings. `Aliases` and `Description` are optional semantic-search hints. |
 | Accounting period | `accounting.Period` | Closed periods reject postings. `Start` and `End` are calendar dates (inclusive) in the company's timezone. |
 | Journal entry | `accounting.JournalEntry` | Posted immutable entry. `Date` is the business date (`accounting.Date`, `YYYY-MM-DD`); `PostedAt` is the UTC instant it was written. |
 | Journal line | `accounting.JournalLine` | One debit or credit; amount is stored in minor currency units. |
@@ -92,6 +92,8 @@ Integration event
 Amounts use `int64` minor units so balance checks are exact and never depend on floating-point comparison.
 
 Dates and instants are different types on purpose. `accounting.Date` (year/month/day) maps to Postgres `DATE` for `JournalEntry.Date`, `JournalIntent.Date`, and `Period.Start/End` — these are calendar dates whose meaning depends on the company's timezone, not absolute moments. `time.Time` over `TIMESTAMPTZ` is reserved for real instants (`PostedAt`). Crossing the boundary requires an explicit `*time.Location`, available from `Company.Location()`.
+
+Account search is semantic, not substring. The `find_accounts` tool sets `AccountFilter.Query` to a natural-language description of the economic event and the adapter ranks the chart by cosine similarity. `accounting.AccountEmbeddingText` builds the indexed text from each account's name, `Description`, and `Aliases` (everyday transaction wording) while excluding the code, so its digits do not dilute the semantic vector. The Postgres adapter ranks with pgvector; the in-memory adapter delegates to a chromem-go searcher. `Aliases` and `Description` are seed-time indexing inputs — the projection persists only the resulting embedding, so changing them requires re-seeding. Exact code lookup stays on `LedgerRepository.Account`; a lexical/hybrid channel that matches codes and exact names is a planned addition.
 
 ## Invariants
 

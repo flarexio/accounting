@@ -32,7 +32,7 @@ type Repository struct {
 // Option configures an in-memory repository at construction time.
 type Option func(*Repository)
 
-// WithSearcher routes FindAccounts to s when NameContains is set, and indexes every PutAccount through it.
+// WithSearcher routes FindAccounts to s when Query is set, and indexes every PutAccount through it.
 func WithSearcher(s accounting.AccountSearcher) Option {
 	return func(r *Repository) { r.searcher = s }
 }
@@ -98,9 +98,9 @@ func (r *Repository) Accounts(_ context.Context) ([]accounting.Account, error) {
 	return out, nil
 }
 
-// FindAccounts honors Type and ActiveOnly; NameContains is delegated to the wired AccountSearcher and ignored when none is set.
+// FindAccounts honors Type and ActiveOnly; Query is delegated to the wired AccountSearcher and ignored when none is set.
 func (r *Repository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
-	needle := strings.TrimSpace(filter.NameContains)
+	needle := strings.TrimSpace(filter.Query)
 	if needle != "" && r.searcher != nil {
 		return r.searcher.Search(ctx, needle, filter, findAccountsSearcherLimit)
 	}
