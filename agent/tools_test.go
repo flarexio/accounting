@@ -74,6 +74,27 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	}
 }
 
+func TestPromptRenderer_ListsInactiveAccountsAndRejectRule(t *testing.T) {
+	r := agent.PromptRenderer{
+		Company: accounting.Company{Name: "Acme"},
+		Accounts: []accounting.Account{
+			{Code: "6117", Name: "Misc Expense", Type: accounting.AccountExpense, Active: true},
+			{Code: "6199", Name: "Legacy Expense", Type: accounting.AccountExpense, Active: false},
+		},
+	}
+	msgs, err := r.Render(llm.ReasoningInput{Task: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "Inactive accounts") || !strings.Contains(sys, "6199 Legacy Expense") {
+		t.Error("a small chart should list inactive accounts in a disabled section")
+	}
+	if !strings.Contains(sys, "shown as inactive") || !strings.Contains(sys, "state that the account is disabled") {
+		t.Error("the prompt should carry the inactive-account reject rule")
+	}
+}
+
 func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 	mk := func(n int) []accounting.Account {
 		accounts := make([]accounting.Account, n)
