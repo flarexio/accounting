@@ -366,3 +366,39 @@ func TestScenarioLoader_SeedsRepository(t *testing.T) {
 		t.Fatalf("expected closed April period, got %+v ok=%v", p, ok)
 	}
 }
+
+func TestAccountEmbeddingText(t *testing.T) {
+	cases := []struct {
+		name    string
+		account accounting.Account
+		want    string
+	}{
+		{
+			name:    "name only",
+			account: accounting.Account{Code: "6104", Name: "旅費"},
+			want:    "旅費",
+		},
+		{
+			name: "name, description, and aliases joined; code excluded",
+			account: accounting.Account{
+				Code:        "6104",
+				Name:        "旅費",
+				Description: "員工因公出差的交通與住宿費用",
+				Aliases:     []string{"差旅費", "出差", "高鐵票", "住宿費"},
+			},
+			want: "旅費 員工因公出差的交通與住宿費用 差旅費 出差 高鐵票 住宿費",
+		},
+		{
+			name:    "aliases without description",
+			account: accounting.Account{Name: "水電瓦斯費", Aliases: []string{"電費", "水費"}},
+			want:    "水電瓦斯費 電費 水費",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := accounting.AccountEmbeddingText(tc.account); got != tc.want {
+				t.Errorf("AccountEmbeddingText() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

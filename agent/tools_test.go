@@ -34,7 +34,7 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 			return llm.ToolCallsOutput[bookkeeping.Intent](
 				[]llm.ToolCall{{
 					Name: "find_accounts",
-					Args: json.RawMessage(`{"name_contains":"credit","type":""}`),
+					Args: json.RawMessage(`{"query":"company credit card payable","type":""}`),
 				}},
 				nil,
 				"look up the credit-card account first",

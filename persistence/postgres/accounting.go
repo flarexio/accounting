@@ -136,9 +136,9 @@ func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Accou
 	return out, nil
 }
 
-// FindAccounts uses pgvector cosine similarity when NameContains is set; otherwise a plain Type/ActiveOnly SQL filter.
+// FindAccounts uses pgvector cosine similarity when Query is set; otherwise a plain Type/ActiveOnly SQL filter.
 func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
-	needle := strings.TrimSpace(filter.NameContains)
+	needle := strings.TrimSpace(filter.Query)
 	if needle == "" {
 		return r.findAccountsByFilter(ctx, filter)
 	}
@@ -287,7 +287,7 @@ func (r *accountingRepository) attachLines(ctx context.Context, rows []pgstore.J
 
 // PutAccount upserts the account row and writes its embedding in the same statement.
 func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
-	vec, err := r.embedder.Embed(ctx, a.Code+" "+a.Name)
+	vec, err := r.embedder.Embed(ctx, accounting.AccountEmbeddingText(a))
 	if err != nil {
 		return err
 	}

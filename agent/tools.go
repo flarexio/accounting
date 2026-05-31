@@ -14,8 +14,8 @@ import (
 const toolFindAccounts = "find_accounts"
 
 type findAccountsArgs struct {
-	NameContains string `json:"name_contains"`
-	Type         string `json:"type"`
+	Query string `json:"query"`
+	Type  string `json:"type"`
 }
 
 // findAccountsArgsSchema is the JSON Schema OpenAI structured-outputs strict
@@ -24,9 +24,9 @@ type findAccountsArgs struct {
 const findAccountsArgsSchema = `{
   "type": "object",
   "additionalProperties": false,
-  "required": ["name_contains", "type"],
+  "required": ["query", "type"],
   "properties": {
-    "name_contains": { "type": "string", "description": "Substring matched case-insensitively against account names." },
+    "query": { "type": "string", "description": "Describe the economic event or the kind of account you need in natural language (e.g. \"employee business travel: high-speed rail and hotel\"). Ranked semantically against account names, descriptions, and aliases -- it is not a literal substring, so describe the meaning rather than guessing the exact account name." },
     "type": {
       "type": "string",
       "description": "Restrict to one account type; empty string means all types.",
@@ -43,7 +43,7 @@ func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
 		toolFindAccounts: {
 			Spec: llm.ToolSpec{
 				Name:        toolFindAccounts,
-				Description: "Search the chart of accounts by case-insensitive name substring; returns only active accounts.",
+				Description: "Search the chart of accounts by describing the transaction or account in natural language; returns only active accounts, best match first.",
 				ArgsSchema:  json.RawMessage(findAccountsArgsSchema),
 			},
 			Handler: findAccountsHandler(repo),
@@ -62,9 +62,9 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 			}
 		}
 		matches, err := repo.FindAccounts(ctx, accounting.AccountFilter{
-			NameContains: p.NameContains,
-			Type:         accounting.AccountType(strings.TrimSpace(p.Type)),
-			ActiveOnly:   true,
+			Query:      p.Query,
+			Type:       accounting.AccountType(strings.TrimSpace(p.Type)),
+			ActiveOnly: true,
 		})
 		if err != nil {
 			return "", err

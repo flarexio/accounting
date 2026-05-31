@@ -50,13 +50,13 @@ func TestRepository_WithoutSearcher_DoesNotIndex(t *testing.T) {
 	}
 }
 
-func TestRepository_FindAccounts_DelegatesWhenNameContainsSet(t *testing.T) {
+func TestRepository_FindAccounts_DelegatesWhenQuerySet(t *testing.T) {
 	s := &fakeSearcher{
 		want:    "cash",
 		results: []accounting.Account{{Code: "1010", Name: "Cash", Type: accounting.AccountAsset, Active: true}},
 	}
 	repo := memory.NewAccountingRepository(memory.WithSearcher(s))
-	got, err := repo.FindAccounts(context.Background(), accounting.AccountFilter{NameContains: "cash"})
+	got, err := repo.FindAccounts(context.Background(), accounting.AccountFilter{Query: "cash"})
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestRepository_FindAccounts_DelegatesWhenNameContainsSet(t *testing.T) {
 	}
 }
 
-func TestRepository_FindAccounts_SkipsSearcherWhenNameContainsEmpty(t *testing.T) {
+func TestRepository_FindAccounts_SkipsSearcherWhenQueryEmpty(t *testing.T) {
 	s := &fakeSearcher{want: "should-not-be-called"}
 	repo := memory.NewAccountingRepository(memory.WithSearcher(s))
 	if err := repo.PutAccount(context.Background(), accounting.Account{Code: "1010", Name: "Cash", Type: accounting.AccountAsset, Active: true}); err != nil {
