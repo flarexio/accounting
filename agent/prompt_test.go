@@ -49,13 +49,19 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 		}
 	}
 
-	for _, hide := range []string{
-		"5900 Legacy Office Rent",
-		"2026-04",
-	} {
-		if strings.Contains(system, hide) {
-			t.Errorf("system prompt should not include %q\n--- prompt ---\n%s", hide, system)
-		}
+	if strings.Contains(system, "2026-04") {
+		t.Errorf("system prompt should not include the closed period 2026-04\n--- prompt ---\n%s", system)
+	}
+
+	// The inactive account is listed, but only under the disabled section so the
+	// model can refuse it rather than post to it.
+	disabled := strings.Index(system, "Inactive accounts")
+	legacy := strings.Index(system, "5900 Legacy Office Rent")
+	if disabled < 0 || legacy < 0 {
+		t.Fatalf("inactive account should appear in a disabled section\n--- prompt ---\n%s", system)
+	}
+	if legacy < disabled {
+		t.Errorf("5900 leaked into the active chart instead of the disabled section\n--- prompt ---\n%s", system)
 	}
 
 	task := messages[1].Content

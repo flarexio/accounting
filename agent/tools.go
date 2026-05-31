@@ -43,7 +43,7 @@ func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
 		toolFindAccounts: {
 			Spec: llm.ToolSpec{
 				Name:        toolFindAccounts,
-				Description: "Search the chart of accounts by describing the transaction or account in natural language; returns only active accounts, best match first.",
+				Description: "Search the chart of accounts by describing the transaction or account in natural language. Active accounts are listed best match first; any matching inactive (disabled) accounts are listed separately and must not be used in a posting.",
 				ArgsSchema:  json.RawMessage(findAccountsArgsSchema),
 			},
 			Handler: findAccountsHandler(repo),
@@ -52,7 +52,9 @@ func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
 }
 
 // findAccountsHandler answers a find_accounts call by searching repo's chart.
-// Only active accounts are returned -- a posting may not use an inactive one.
+// Inactive matches are returned too, flagged, so the model can refuse a
+// disabled account the user named rather than silently substituting an active
+// one; the posting itself may still only use an active account.
 func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 	return func(ctx context.Context, args json.RawMessage) (string, error) {
 		var p findAccountsArgs
@@ -62,9 +64,8 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 			}
 		}
 		matches, err := repo.FindAccounts(ctx, accounting.AccountFilter{
-			Query:      p.Query,
-			Type:       accounting.AccountType(strings.TrimSpace(p.Type)),
-			ActiveOnly: true,
+			Query: p.Query,
+			Type:  accounting.AccountType(strings.TrimSpace(p.Type)),
 		})
 		if err != nil {
 			return "", err
@@ -73,14 +74,35 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 	}
 }
 
+// formatAccountMatches renders the active matches as the postable candidates
+// and lists any inactive matches separately as disabled, so the model can tell
+// a disabled account apart from a missing one.
 func formatAccountMatches(accounts []accounting.Account) string {
-	if len(accounts) == 0 {
-		return "No active accounts match. Try a broader search term."
+	var active, inactive []accounting.Account
+	for _, a := range accounts {
+		if a.Active {
+			active = append(active, a)
+		} else {
+			inactive = append(inactive, a)
+		}
+	}
+	if len(active) == 0 && len(inactive) == 0 {
+		return "No accounts match. Try a broader search term."
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d matching active account(s):", len(accounts))
-	for _, a := range accounts {
-		fmt.Fprintf(&b, "\n  - %s %s (%s)", a.Code, a.Name, a.Type)
+	if len(active) > 0 {
+		fmt.Fprintf(&b, "%d matching active account(s):", len(active))
+		for _, a := range active {
+			fmt.Fprintf(&b, "\n  - %s %s (%s)", a.Code, a.Name, a.Type)
+		}
+	} else {
+		b.WriteString("No active accounts match.")
+	}
+	if len(inactive) > 0 {
+		fmt.Fprintf(&b, "\n\n%d inactive account(s) matched -- disabled, must not be used in a posting:", len(inactive))
+		for _, a := range inactive {
+			fmt.Fprintf(&b, "\n  - %s %s (%s)", a.Code, a.Name, a.Type)
+		}
 	}
 	return b.String()
 }
