@@ -7,16 +7,50 @@ company:
   timezone: Asia/Taipei
   retained_earnings_code: "3351"
 
+# Transaction-facing accounts carry `aliases` and `description`: everyday
+# wording a journal narration might use, so semantic search reaches the right
+# account from how the event is described rather than its formal name. Purely
+# structural accounts (accumulated depreciation, capital reserves) stay terse.
 accounts:
-  - { code: "1101", name: 庫存現金, type: asset, active: true }
-  - { code: "1102", name: 零用金, type: asset, active: true }
-  - { code: "1103", name: 銀行存款, type: asset, active: true }
+  - code: "1101"
+    name: 庫存現金
+    type: asset
+    active: true
+    description: 公司保管的庫存現金
+    aliases: [現金, 收現, 付現, 現金收付]
+  - code: "1102"
+    name: 零用金
+    type: asset
+    active: true
+    description: 供零星支付的備用現金
+    aliases: [週轉金, 小額現金, 備用金]
+  - code: "1103"
+    name: 銀行存款
+    type: asset
+    active: true
+    description: 存放於銀行的活期與支票存款
+    aliases: [活存, 支存, 匯款, 轉帳, 銀行帳戶]
   - { code: "1131", name: 應收票據, type: asset, active: true }
-  - { code: "1141", name: 應收帳款, type: asset, active: true }
+  - code: "1141"
+    name: 應收帳款
+    type: asset
+    active: true
+    description: 賒銷商品或勞務尚未收取的款項
+    aliases: [賒銷, 客戶欠款, 應收]
   - { code: "1151", name: 備抵呆帳, type: asset, active: true }
   - { code: "1181", name: 其他應收款, type: asset, active: true }
-  - { code: "1211", name: 商品存貨, type: asset, active: true }
-  - { code: "1281", name: 進項稅額, type: asset, active: true }
+  - code: "1211"
+    name: 商品存貨
+    type: asset
+    active: true
+    description: 待售商品的存貨
+    aliases: [庫存, 存貨, 商品]
+  - code: "1281"
+    name: 進項稅額
+    type: asset
+    active: true
+    description: 進貨或費用支付的 5% 營業稅，可扣抵銷項
+    aliases: [進項, 進項營業稅, 可扣抵營業稅]
   - { code: "1411", name: 預付費用, type: asset, active: true }
   - { code: "1421", name: 預付貨款, type: asset, active: true }
   - { code: "1441", name: 存出保證金, type: asset, active: true }
@@ -27,12 +61,37 @@ accounts:
   - { code: "1681", name: 辦公設備, type: asset, active: true }
   - { code: "2101", name: 短期借款, type: liability, active: true }
   - { code: "2131", name: 應付票據, type: liability, active: true }
-  - { code: "2141", name: 應付帳款, type: liability, active: true }
+  - code: "2141"
+    name: 應付帳款
+    type: liability
+    active: true
+    description: 賒購商品或勞務尚未支付的款項
+    aliases: [賒購, 欠供應商, 應付]
   - { code: "2161", name: 應付費用, type: liability, active: true }
-  - { code: "2171", name: 應付薪資, type: liability, active: true }
-  - { code: "2181", name: 應付營業稅, type: liability, active: true }
-  - { code: "2191", name: 銷項稅額, type: liability, active: true }
-  - { code: "2201", name: 代收款, type: liability, active: true }
+  - code: "2171"
+    name: 應付薪資
+    type: liability
+    active: true
+    description: 已發生但尚未發放的薪資
+    aliases: [應付薪水, 欠員工薪資]
+  - code: "2181"
+    name: 應付營業稅
+    type: liability
+    active: true
+    description: 應繳納的營業稅淨額（銷項減進項）
+    aliases: [營業稅, 應納營業稅, 應納稅額]
+  - code: "2191"
+    name: 銷項稅額
+    type: liability
+    active: true
+    description: 銷貨開立發票收取的 5% 營業稅
+    aliases: [銷項, 銷項營業稅]
+  - code: "2201"
+    name: 代收款
+    type: liability
+    active: true
+    description: 代員工或第三人暫收的款項，如勞健保自付額與代扣所得稅
+    aliases: [代扣款, 代收代付, 勞健保代扣, 代扣所得稅]
   - { code: "2211", name: 預收貨款, type: liability, active: true }
   - { code: "2511", name: 長期借款, type: liability, active: true }
   - { code: "3101", name: 股本, type: equity, active: true }
@@ -40,25 +99,115 @@ accounts:
   - { code: "3301", name: 法定盈餘公積, type: equity, active: true }
   - { code: "3351", name: 未分配盈餘, type: equity, active: true }
   - { code: "3411", name: 本期損益, type: equity, active: true }
-  - { code: "4101", name: 銷貨收入, type: revenue, active: true }
-  - { code: "4111", name: 銷貨退回及折讓, type: revenue, active: true }
-  - { code: "4201", name: 勞務收入, type: revenue, active: true }
-  - { code: "7101", name: 利息收入, type: revenue, active: true }
+  - code: "4101"
+    name: 銷貨收入
+    type: revenue
+    active: true
+    description: 銷售商品的營業收入
+    aliases: [營業收入, 賣貨, 銷售收入, 開發票收入]
+  - code: "4111"
+    name: 銷貨退回及折讓
+    type: revenue
+    active: true
+    description: 銷貨退回與價格折讓的收入減項
+    aliases: [退貨, 折讓, 銷貨折讓]
+  - code: "4201"
+    name: 勞務收入
+    type: revenue
+    active: true
+    description: 提供勞務或服務的收入
+    aliases: [服務收入, 服務費收入]
+  - code: "7101"
+    name: 利息收入
+    type: revenue
+    active: true
+    description: 存款或放款的利息收入
+    aliases: [存款利息, 利息所得]
   - { code: "7111", name: 兌換利益, type: revenue, active: true }
-  - { code: "5101", name: 銷貨成本, type: expense, active: true }
-  - { code: "5111", name: 進貨, type: expense, active: true }
-  - { code: "6101", name: 薪資支出, type: expense, active: true }
-  - { code: "6102", name: 租金支出, type: expense, active: true }
-  - { code: "6103", name: 文具用品, type: expense, active: true }
-  - { code: "6104", name: 旅費, type: expense, active: true }
-  - { code: "6106", name: 郵電費, type: expense, active: true }
-  - { code: "6108", name: 廣告費, type: expense, active: true }
-  - { code: "6109", name: 水電瓦斯費, type: expense, active: true }
-  - { code: "6110", name: 保險費, type: expense, active: true }
-  - { code: "6113", name: 折舊, type: expense, active: true }
-  - { code: "6115", name: 交際費, type: expense, active: true }
-  - { code: "6117", name: 雜費, type: expense, active: true }
-  - { code: "7211", name: 利息費用, type: expense, active: true }
+  - code: "5101"
+    name: 銷貨成本
+    type: expense
+    active: true
+    description: 已售出商品的進貨成本
+    aliases: [成本, 賣出成本, 銷售成本]
+  - code: "5111"
+    name: 進貨
+    type: expense
+    active: true
+    description: 為銷售而採購的商品
+    aliases: [採購, 買貨, 進料]
+  - code: "6101"
+    name: 薪資支出
+    type: expense
+    active: true
+    description: 員工薪資與工資費用
+    aliases: [薪水, 工資, 發薪, 月薪]
+  - code: "6102"
+    name: 租金支出
+    type: expense
+    active: true
+    description: 承租房屋、店面或設備的租金費用
+    aliases: [房租, 店租, 辦公室租金, 租金]
+  - code: "6103"
+    name: 文具用品
+    type: expense
+    active: true
+    description: 辦公文具與耗材支出
+    aliases: [文具, 辦公用品, 耗材]
+  - code: "6104"
+    name: 旅費
+    type: expense
+    active: true
+    description: 員工因公出差的交通與住宿費用
+    aliases: [差旅費, 出差, 計程車費, 高鐵票, 機票, 住宿費, 交通費]
+  - code: "6106"
+    name: 郵電費
+    type: expense
+    active: true
+    description: 郵寄、電話與網路通訊費用
+    aliases: [郵資, 電話費, 網路費, 快遞費, 郵寄]
+  - code: "6108"
+    name: 廣告費
+    type: expense
+    active: true
+    description: 廣告與行銷宣傳支出
+    aliases: [廣告, 行銷費, 宣傳費, 推廣費]
+  - code: "6109"
+    name: 水電瓦斯費
+    type: expense
+    active: true
+    description: 水、電、瓦斯等公用事業費用
+    aliases: [水費, 電費, 瓦斯費, 水電費]
+  - code: "6110"
+    name: 保險費
+    type: expense
+    active: true
+    description: 投保產生的保險費用（非勞健保）
+    aliases: [保險, 產險, 火險, 保費]
+  - code: "6113"
+    name: 折舊
+    type: expense
+    active: true
+    description: 固定資產的折舊費用
+    aliases: [折舊費用, 攤提折舊]
+  - code: "6115"
+    name: 交際費
+    type: expense
+    active: true
+    description: 業務招待與交際應酬支出
+    aliases: [交際, 應酬, 招待費, 請客, 餐敘]
+  - code: "6117"
+    name: 雜費
+    type: expense
+    active: true
+    description: 無專屬科目的零星費用
+    aliases: [雜支, 零星支出]
+  - code: "7211"
+    name: 利息費用
+    type: expense
+    active: true
+    description: 借款的利息費用
+    aliases: [借款利息, 利息支出]
   - { code: "7212", name: 兌換損失, type: expense, active: true }
   - { code: "6199", name: 其他費用（舊制，停用）, type: expense, active: false }
 

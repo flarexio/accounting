@@ -56,9 +56,10 @@ type LedgerRepository interface {
 	RelationsTo(ctx context.Context, entryID string) ([]JournalRelation, error)
 }
 
-// AccountFilter narrows FindAccounts. NameContains is a semantic hint; Type and ActiveOnly are exact.
+// AccountFilter narrows FindAccounts. Query is a natural-language semantic
+// search over the chart; Type and ActiveOnly are exact.
 type AccountFilter struct {
-	NameContains string
-	Type         AccountType
-	ActiveOnly   bool
+	Query      string
+	Type       AccountType
+	ActiveOnly bool
 }

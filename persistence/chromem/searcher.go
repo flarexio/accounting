@@ -1,6 +1,6 @@
 // Package chromem provides an in-process AccountSearcher backed by
-// chromem-go, so the in-memory ledger adapter can answer NameContains
-// queries with semantic ranking instead of dropping the hint.
+// chromem-go, so the in-memory ledger adapter can answer AccountFilter.Query
+// searches with semantic ranking instead of dropping the hint.
 package chromem
 
 import (
@@ -16,7 +16,7 @@ import (
 
 const collectionName = "accounts"
 
-// Searcher indexes accounts in a chromem-go collection and answers FindAccounts NameContains queries by cosine similarity.
+// Searcher indexes accounts in a chromem-go collection and answers FindAccounts Query searches by cosine similarity.
 type Searcher struct {
 	coll *chromem.Collection
 }
@@ -41,7 +41,7 @@ func (s *Searcher) Index(ctx context.Context, a accounting.Account) error {
 	}
 	doc := chromem.Document{
 		ID:      a.Code,
-		Content: a.Code + " " + a.Name,
+		Content: accounting.AccountEmbeddingText(a),
 		Metadata: map[string]string{
 			"code":   a.Code,
 			"name":   a.Name,
