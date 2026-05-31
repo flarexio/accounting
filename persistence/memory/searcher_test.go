@@ -65,6 +65,37 @@ func TestRepository_FindAccounts_DelegatesWhenQuerySet(t *testing.T) {
 	}
 }
 
+func TestRepository_FindAccounts_HybridPromotesLexicalHit(t *testing.T) {
+	// Dense ranks Credit Card Payable above Cash; an exact-name lexical hit on
+	// "Cash" should fuse high enough to overtake it.
+	s := &fakeSearcher{
+		want: "Cash",
+		results: []accounting.Account{
+			{Code: "2100", Name: "Credit Card Payable", Type: accounting.AccountLiability, Active: true},
+			{Code: "1010", Name: "Cash", Type: accounting.AccountAsset, Active: true},
+		},
+	}
+	repo := memory.NewAccountingRepository(memory.WithSearcher(s))
+	for _, a := range []accounting.Account{
+		{Code: "1010", Name: "Cash", Type: accounting.AccountAsset, Active: true},
+		{Code: "2100", Name: "Credit Card Payable", Type: accounting.AccountLiability, Active: true},
+	} {
+		if err := repo.PutAccount(context.Background(), a); err != nil {
+			t.Fatalf("put: %v", err)
+		}
+	}
+	got, err := repo.FindAccounts(context.Background(), accounting.AccountFilter{Query: "Cash"})
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected both accounts fused, got %+v", got)
+	}
+	if got[0].Code != "1010" {
+		t.Fatalf("expected lexical hit 1010 promoted to first, got %+v", got)
+	}
+}
+
 func TestRepository_FindAccounts_SkipsSearcherWhenQueryEmpty(t *testing.T) {
 	s := &fakeSearcher{want: "should-not-be-called"}
 	repo := memory.NewAccountingRepository(memory.WithSearcher(s))

@@ -98,11 +98,13 @@ func (r *Repository) Accounts(_ context.Context) ([]accounting.Account, error) {
 	return out, nil
 }
 
-// FindAccounts honors Type and ActiveOnly; Query is delegated to the wired AccountSearcher and ignored when none is set.
+// FindAccounts honors Type and ActiveOnly; when Query is set and a searcher is
+// wired it runs hybrid retrieval (semantic + lexical, fused by RRF), otherwise
+// Query is ignored.
 func (r *Repository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
 	needle := strings.TrimSpace(filter.Query)
 	if needle != "" && r.searcher != nil {
-		return r.searcher.Search(ctx, needle, filter, findAccountsSearcherLimit)
+		return r.hybridSearch(ctx, needle, filter)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -118,6 +120,56 @@ func (r *Repository) FindAccounts(ctx context.Context, filter accounting.Account
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
 	return out, nil
+}
+
+// hybridSearch fuses the searcher's semantic ranking with a lexical pass over
+// the chart (exact code, exact or substring name) using reciprocal rank
+// fusion, so an exact code or name hit the embedding buries still surfaces.
+func (r *Repository) hybridSearch(ctx context.Context, query string, filter accounting.AccountFilter) ([]accounting.Account, error) {
+	dense, err := r.searcher.Search(ctx, query, filter, findAccountsSearcherLimit)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	lexical := r.lexicalCandidates(query, filter)
+	r.mu.RUnlock()
+	return accounting.FuseAccountsRRF([][]accounting.Account{dense, lexical}, findAccountsSearcherLimit), nil
+}
+
+// lexicalCandidates returns chart accounts whose code or name relates to query
+// (per accounting.LexicalAccountTier), honoring Type and ActiveOnly, ordered
+// by match strength then code. The caller holds the read lock.
+func (r *Repository) lexicalCandidates(query string, filter accounting.AccountFilter) []accounting.Account {
+	type scored struct {
+		account accounting.Account
+		tier    int
+	}
+	var matched []scored
+	for _, a := range r.accounts {
+		if filter.ActiveOnly && !a.Active {
+			continue
+		}
+		if filter.Type != "" && a.Type != filter.Type {
+			continue
+		}
+		if tier, ok := accounting.LexicalAccountTier(query, a.Code, a.Name); ok {
+			matched = append(matched, scored{a, tier})
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].tier != matched[j].tier {
+			return matched[i].tier < matched[j].tier
+		}
+		return matched[i].account.Code < matched[j].account.Code
+	})
+	out := make([]accounting.Account, 0, len(matched))
+	for _, m := range matched {
+		out = append(out, m.account)
+	}
+	if len(out) > findAccountsSearcherLimit {
+		out = out[:findAccountsSearcherLimit]
+	}
+	return out
 }
 
 func (r *Repository) Periods(_ context.Context) ([]accounting.Period, error) {
