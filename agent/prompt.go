@@ -99,6 +99,10 @@ func (r PromptRenderer) tenantContext() string {
 	} else {
 		b.WriteString("\nActive chart of accounts:\n")
 		b.WriteString(r.activeAccounts())
+		if inactive := r.inactiveAccounts(); inactive != "" {
+			b.WriteString("\nInactive accounts (disabled, must not be used in a posting):\n")
+			b.WriteString(inactive)
+		}
 	}
 
 	b.WriteString("\nOpen accounting periods:\n")
@@ -176,12 +180,21 @@ func intentsText() string {
 }
 
 func (r PromptRenderer) activeAccounts() string {
+	return r.accountsList(true)
+}
+
+func (r PromptRenderer) inactiveAccounts() string {
+	return r.accountsList(false)
+}
+
+// accountsList renders chart accounts whose Active matches active, code-sorted.
+func (r PromptRenderer) accountsList(active bool) string {
 	sorted := append([]accounting.Account(nil), r.Accounts...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Code < sorted[j].Code })
 
 	var b strings.Builder
 	for _, a := range sorted {
-		if !a.Active {
+		if a.Active != active {
 			continue
 		}
 		fmt.Fprintf(&b, "  - %s %s (%s)\n", a.Code, a.Name, a.Type)
@@ -270,5 +283,6 @@ Format rules for post_journal payloads:
 Behavior rules:
   - If validation feedback is present, fix only the named problems and resubmit.
   - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
+  - If the user explicitly asks to use an account shown as inactive (in the chart listing or by find_accounts), use reject and state that the account is disabled. Do not substitute a different account.
   - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
 )
