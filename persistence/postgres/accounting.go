@@ -136,13 +136,14 @@ func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Accou
 	return out, nil
 }
 
-// FindAccounts uses pgvector cosine similarity when Query is set; otherwise a plain Type/ActiveOnly SQL filter.
+// FindAccounts runs hybrid retrieval (pgvector similarity fused with a lexical
+// code/name pass) when Query is set; otherwise a plain Type/ActiveOnly filter.
 func (r *accountingRepository) FindAccounts(ctx context.Context, filter accounting.AccountFilter) ([]accounting.Account, error) {
 	needle := strings.TrimSpace(filter.Query)
 	if needle == "" {
 		return r.findAccountsByFilter(ctx, filter)
 	}
-	return r.findAccountsBySimilarity(ctx, filter, needle)
+	return r.findAccountsHybrid(ctx, filter, needle)
 }
 
 const findAccountsSimilarityLimit = 20
@@ -162,7 +163,22 @@ ORDER BY code
 	return scanAccountRows(rows)
 }
 
-func (r *accountingRepository) findAccountsBySimilarity(ctx context.Context, filter accounting.AccountFilter, query string) ([]accounting.Account, error) {
+// findAccountsHybrid fuses the dense (pgvector) and lexical channels with
+// reciprocal rank fusion so an exact code or name hit the embedding buries
+// still surfaces.
+func (r *accountingRepository) findAccountsHybrid(ctx context.Context, filter accounting.AccountFilter, query string) ([]accounting.Account, error) {
+	dense, err := r.denseAccounts(ctx, filter, query)
+	if err != nil {
+		return nil, err
+	}
+	lexical, err := r.lexicalAccounts(ctx, filter, query)
+	if err != nil {
+		return nil, err
+	}
+	return accounting.FuseAccountsRRF([][]accounting.Account{dense, lexical}, findAccountsSimilarityLimit), nil
+}
+
+func (r *accountingRepository) denseAccounts(ctx context.Context, filter accounting.AccountFilter, query string) ([]accounting.Account, error) {
 	vec, err := r.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, err
@@ -177,7 +193,38 @@ ORDER BY embedding <=> $3::vector
 LIMIT $4
 `, filter.ActiveOnly, string(filter.Type), formatVector(vec), findAccountsSimilarityLimit)
 	if err != nil {
-		return nil, fmt.Errorf("postgres: FindAccounts (similarity): %w", err)
+		return nil, fmt.Errorf("postgres: FindAccounts (dense): %w", err)
+	}
+	defer rows.Close()
+	return scanAccountRows(rows)
+}
+
+// lexicalAccounts mirrors accounting.LexicalAccountTier in SQL: exact code (0),
+// exact name (1), name<->query substring (2), code inside query (3), ordered by
+// tier then code. Keep the CASE in sync with that function.
+func (r *accountingRepository) lexicalAccounts(ctx context.Context, filter accounting.AccountFilter, query string) ([]accounting.Account, error) {
+	rows, err := r.pool.Query(ctx, `
+SELECT code, name, type, active
+FROM accounts
+WHERE (NOT $1::bool OR active)
+  AND ($2::text = '' OR type = $2::text)
+  AND (
+    lower(code) = lower($3)
+    OR lower(name) = lower($3)
+    OR position(lower($3) IN lower(name)) > 0
+    OR position(lower(name) IN lower($3)) > 0
+    OR position(lower(code) IN lower($3)) > 0
+  )
+ORDER BY CASE
+    WHEN lower(code) = lower($3) THEN 0
+    WHEN lower(name) = lower($3) THEN 1
+    WHEN position(lower($3) IN lower(name)) > 0 OR position(lower(name) IN lower($3)) > 0 THEN 2
+    ELSE 3
+  END, code
+LIMIT $4
+`, filter.ActiveOnly, string(filter.Type), query, findAccountsSimilarityLimit)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: FindAccounts (lexical): %w", err)
 	}
 	defer rows.Close()
 	return scanAccountRows(rows)
