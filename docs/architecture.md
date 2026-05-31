@@ -93,7 +93,12 @@ Amounts use `int64` minor units so balance checks are exact and never depend on 
 
 Dates and instants are different types on purpose. `accounting.Date` (year/month/day) maps to Postgres `DATE` for `JournalEntry.Date`, `JournalIntent.Date`, and `Period.Start/End` — these are calendar dates whose meaning depends on the company's timezone, not absolute moments. `time.Time` over `TIMESTAMPTZ` is reserved for real instants (`PostedAt`). Crossing the boundary requires an explicit `*time.Location`, available from `Company.Location()`.
 
-Account search is semantic, not substring. The `find_accounts` tool sets `AccountFilter.Query` to a natural-language description of the economic event and the adapter ranks the chart by cosine similarity. `accounting.AccountEmbeddingText` builds the indexed text from each account's name, `Description`, and `Aliases` (everyday transaction wording) while excluding the code, so its digits do not dilute the semantic vector. The Postgres adapter ranks with pgvector; the in-memory adapter delegates to a chromem-go searcher. `Aliases` and `Description` are seed-time indexing inputs — the projection persists only the resulting embedding, so changing them requires re-seeding. Exact code lookup stays on `LedgerRepository.Account`; a lexical/hybrid channel that matches codes and exact names is a planned addition.
+Account search is hybrid, not substring. The `find_accounts` tool sets `AccountFilter.Query` to a natural-language description of the economic event, and the adapter blends two ranked channels:
+
+- **Dense.** Cosine similarity over `accounting.AccountEmbeddingText` — each account's name, `Description`, and `Aliases` (everyday transaction wording), with the code excluded so its digits do not dilute the semantic vector. The Postgres adapter ranks with pgvector; the in-memory adapter delegates to a chromem-go searcher.
+- **Lexical.** Exact code, exact name, name↔query substring, or code-in-query, ordered by match strength (`accounting.LexicalAccountTier`, mirrored in the Postgres SQL `CASE`). This catches the "I know it's 6104" or exact-name query the embedding might bury.
+
+The channels are combined by reciprocal rank fusion (`accounting.FuseAccountsRRF`, k=60): each account's score is the sum of `1/(k + rank)` across the channels that ranked it, so agreement between channels wins and a query that mentions neither a code nor a name simply falls back to the dense ranking. `Aliases` and `Description` are seed-time indexing inputs — the projection persists only the resulting embedding, so changing them requires re-seeding. Exact single-account lookup stays on `LedgerRepository.Account`.
 
 ## Invariants
 
