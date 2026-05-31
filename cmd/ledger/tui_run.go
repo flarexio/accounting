@@ -59,7 +59,7 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 		comp.llmCfg.Model = model
 	}
 
-	repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
+	repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding, comp.cfg.Rerank)
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}

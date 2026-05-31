@@ -83,7 +83,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence, cfg.Embedding)
+	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence, cfg.Embedding, cfg.Rerank)
 	if err != nil {
 		return err
 	}

@@ -54,7 +54,7 @@ func runClose(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return fmt.Errorf("close: %w", err)
 	}
 
-	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence, cfg.Embedding)
+	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence, cfg.Embedding, cfg.Rerank)
 	if err != nil {
 		return err
 	}

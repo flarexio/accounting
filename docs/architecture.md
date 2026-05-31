@@ -100,6 +100,8 @@ Account search is hybrid, not substring. The `find_accounts` tool sets `AccountF
 
 The channels are combined by reciprocal rank fusion (`accounting.FuseAccountsRRF`, k=60): each account's score is the sum of `1/(k + rank)` across the channels that ranked it, so agreement between channels wins and a query that mentions neither a code nor a name simply falls back to the dense ranking. `Aliases` and `Description` are seed-time indexing inputs — the projection persists only the resulting embedding, so changing them requires re-seeding. Exact single-account lookup stays on `LedgerRepository.Account`.
 
+An optional **reranking** stage refines the fused list. `accounting.NewRerankedRepository` decorates any `LedgerRepository`: when `FindAccounts` carries a `Query` and returns more than one candidate, it reorders them through an `accounting.AccountReranker` before returning. The `reranking/openai` adapter implements that port with one chat-completion call that returns the candidate codes in relevance order; unknown codes are ignored and omitted ones are appended in place, so reranking reorders without ever dropping a candidate. It is off unless `rerank.model` is configured, and because it is a transparent decorator neither the memory nor the Postgres adapter knows it exists.
+
 ## Invariants
 
 `accounting.Validator` enforces the ledger rules in code:

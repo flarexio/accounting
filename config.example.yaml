@@ -40,3 +40,10 @@ embedding:
   # migration that re-types accounts.embedding accordingly.
   model: text-embedding-3-small
   dimensions: 1536
+
+rerank:
+  # Optional. When model is set, find_accounts reorders its hybrid
+  # (dense + lexical) candidates through this OpenAI chat model before the
+  # bookkeeper agent sees them. Leave model empty (or omit the block) to keep
+  # the hybrid ordering and skip the extra LLM call. Uses OPENAI_API_KEY.
+  model: ""

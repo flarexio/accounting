@@ -21,6 +21,7 @@ import (
 	embedopenai "github.com/flarexio/accounting/embedding/openai"
 	natsmsg "github.com/flarexio/accounting/messaging/nats"
 	pgrepo "github.com/flarexio/accounting/persistence/postgres"
+	rerankopenai "github.com/flarexio/accounting/reranking/openai"
 )
 
 // loadBookConfig reads config.yaml from dir, or ~/.flarex/accounting when empty; missing is an error.
@@ -36,20 +37,29 @@ func loadBookConfig(dir string) (*config.Config, error) {
 }
 
 // buildRepository materialises the LedgerRepository; the returned Closer is always safe to call.
-func buildRepository(ctx context.Context, persist config.Persistence, embed config.Embedding) (accounting.LedgerRepository, io.Closer, error) {
+func buildRepository(ctx context.Context, persist config.Persistence, embed config.Embedding, rerank config.Rerank) (accounting.LedgerRepository, io.Closer, error) {
 	switch persist.Kind {
 	case config.PersistenceMemory:
-		return memory.NewAccountingRepository(), noopCloser{}, nil
+		return withReranker(memory.NewAccountingRepository(), rerank), noopCloser{}, nil
 	case config.PersistencePostgres:
 		embedder := embedopenai.NewEmbedder(embed.Model, embed.Dimensions)
 		repo, closer, err := pgrepo.NewAccountingRepository(ctx, persist.Postgres.DSN, embedder)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
 		}
-		return repo, closer, nil
+		return withReranker(repo, rerank), closer, nil
 	default:
 		return nil, nil, fmt.Errorf("book-run: unsupported persistence kind %q", persist.Kind)
 	}
+}
+
+// withReranker wraps repo in the account-search reranker when rerank.Model is
+// set; an empty model leaves the hybrid ordering untouched.
+func withReranker(repo accounting.LedgerRepository, rerank config.Rerank) accounting.LedgerRepository {
+	if rerank.Model == "" {
+		return repo
+	}
+	return accounting.NewRerankedRepository(repo, rerankopenai.NewReranker(rerank.Model))
 }
 
 // buildMessaging opens the EventBus and registers the projection handlers via

@@ -62,12 +62,19 @@ type Embedding struct {
 	Dimensions int    `yaml:"dimensions"`
 }
 
+// Rerank holds the optional account-search reranker. An empty Model disables
+// reranking, leaving FindAccounts on the hybrid (dense + lexical) ordering.
+type Rerank struct {
+	Model string `yaml:"model"`
+}
+
 // Config is the decoded representation of config.yaml.
 type Config struct {
 	Persistence Persistence `yaml:"persistence"`
 	Messaging   Messaging   `yaml:"messaging"`
 	LLM         LLM         `yaml:"llm"`
 	Embedding   Embedding   `yaml:"embedding"`
+	Rerank      Rerank      `yaml:"rerank"`
 }
 
 type Persistence struct {
