@@ -129,6 +129,12 @@ func (a *accountingBus) dispatch(msg jetstream.Msg) {
 	_ = msg.Ack()
 }
 
+// CatchUp blocks until the durable consumer has delivered and ack'd every
+// message currently in the stream, i.e. the projection reflects the head.
+func (a *accountingBus) CatchUp(ctx context.Context) error {
+	return a.bus.catchUp(ctx)
+}
+
 func (a *accountingBus) Close() error {
 	return a.bus.close()
 }

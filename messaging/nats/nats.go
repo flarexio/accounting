@@ -126,6 +126,40 @@ func (b *bus) subscribeMessages(handler func(msg jetstream.Msg)) error {
 	return nil
 }
 
+// catchUpPoll is how often catchUp re-reads the consumer's pending counts.
+const catchUpPoll = 50 * time.Millisecond
+
+// defaultCatchUpTimeout bounds catchUp when the caller's context has no
+// deadline, so a stuck consumer (e.g. a poisoned, perpetually-Nak'd message)
+// fails loudly instead of hanging.
+const defaultCatchUpTimeout = 30 * time.Second
+
+// catchUp blocks until the durable consumer has nothing left to do --
+// NumPending (undelivered) and NumAckPending (delivered, awaiting ack) are both
+// zero -- so the projection driven by the consume loop reflects the stream
+// head. It requires the consume loop to be running (subscribeMessages called).
+func (b *bus) catchUp(ctx context.Context) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultCatchUpTimeout)
+		defer cancel()
+	}
+	for {
+		info, err := b.consumer.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("nats: consumer info: %w", err)
+		}
+		if info.NumPending == 0 && info.NumAckPending == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("nats: catch up: %w", ctx.Err())
+		case <-time.After(catchUpPoll):
+		}
+	}
+}
+
 // close drains the consume loop, then closes the connection. Drain must run
 // first because Ack itself publishes over NATS. Safe to call repeatedly.
 func (b *bus) close() error {

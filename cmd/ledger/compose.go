@@ -71,6 +71,10 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)
 	}
+	if err := bus.CatchUp(ctx); err != nil {
+		_ = bus.Close()
+		return nil, fmt.Errorf("book-run: catch up: %w", err)
+	}
 	return bus, nil
 }
 
