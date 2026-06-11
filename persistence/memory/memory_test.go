@@ -28,10 +28,16 @@ func sampleEntry(id string, seq uint64) accounting.JournalPosted {
 	}
 }
 
+// apply projects evt the way a bus dispatch does: EventMeta in the context, then AppendEntry.
+func apply(ctx context.Context, repo *memory.Repository, evt accounting.JournalPosted) error {
+	ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: evt.Subject, Sequence: evt.Sequence})
+	return repo.AppendEntry(ctx, evt.Entry, evt.Relations)
+}
+
 func TestRepository_ApplyAndRead(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	if err := repo.Apply(ctx, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	got, ok, err := repo.Entry(ctx, "JE-0001")
@@ -49,7 +55,7 @@ func TestRepository_ApplyAndRead(t *testing.T) {
 func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	if err := repo.Apply(ctx, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 
@@ -74,7 +80,7 @@ func TestRepository_AppliedEntryIsolatedFromEventLines(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
 	evt := sampleEntry("JE-0001", 1)
-	if err := repo.Apply(ctx, evt); err != nil {
+	if err := apply(ctx, repo, evt); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 
@@ -94,10 +100,10 @@ func TestRepository_LastSequenceTracksPerSubject(t *testing.T) {
 		t.Fatalf("expected zero LastSequence before any apply, got %d", got)
 	}
 
-	if err := repo.Apply(ctx, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Apply(ctx, sampleEntry("JE-0002", 2)); err != nil {
+	if err := apply(ctx, repo, sampleEntry("JE-0002", 2)); err != nil {
 		t.Fatal(err)
 	}
 

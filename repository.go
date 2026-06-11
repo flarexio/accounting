@@ -3,9 +3,9 @@ package accounting
 import "context"
 
 // LedgerRepository is the port a persistence adapter satisfies (memory,
-// postgres). Apply is the only mutation path for journal state -- producers
-// publish a JournalPosted and a subscribed handler invokes Apply. Point reads
-// return (value, true, nil) when found and (zero, false, nil) for not-found.
+// postgres). It speaks only domain models; transport metadata for a projection
+// write rides on the context as EventMeta. Point reads return (value, true, nil)
+// when found and (zero, false, nil) for not-found.
 type LedgerRepository interface {
 	Account(ctx context.Context, code string) (Account, bool, error)
 	Period(ctx context.Context, id string) (Period, bool, error)
@@ -29,21 +29,20 @@ type LedgerRepository interface {
 	// SetCompany stores the (single) company, overwriting any prior value.
 	SetCompany(ctx context.Context, c Company) error
 	PutAccount(ctx context.Context, a Account) error
+	// PutPeriod stores a period, overwriting any prior value.
 	PutPeriod(ctx context.Context, p Period) error
 	PutBranch(ctx context.Context, b Branch) error
 
-	// Apply writes the entry, every JournalRelation in evt.Relations, and
-	// bumps LastSequence for evt.Subject atomically.
-	Apply(ctx context.Context, evt JournalPosted) error
+	// AppendEntry writes the entry, its lines, and relations in one atomic write,
+	// recording the sequence from any EventMeta in the context.
+	AppendEntry(ctx context.Context, entry JournalEntry, relations []JournalRelation) error
 
-	// ApplyPeriodClosure flips evt.Period.Status to closed and bumps
-	// LastSequence for evt.Subject atomically. This is the only path a
-	// period transitions from open to closed in the projection at runtime;
-	// PutPeriod is reserved for seed-time reference-data setup.
-	ApplyPeriodClosure(ctx context.Context, evt PeriodClosure) error
+	// SetPeriodStatus transitions the period's status (an unknown id is an error),
+	// advancing LastSequence from any EventMeta in the context.
+	SetPeriodStatus(ctx context.Context, periodID string, status PeriodStatus) error
 
-	// LastSequence returns the broker sequence of the most recent applied
-	// JournalPosted on subject, or 0 when none has been seen.
+	// LastSequence returns the broker sequence of the most recent applied event
+	// on subject, or 0 when none has been seen.
 	LastSequence(ctx context.Context, subject string) (uint64, error)
 
 	// Relation looks up a single relation row by composite identity.
