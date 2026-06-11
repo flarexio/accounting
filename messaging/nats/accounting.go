@@ -22,6 +22,10 @@ const streamSubjectAccounting = "accounting.>"
 var supportedSubjects = []string{
 	accounting.SubjectJournalPosted,
 	accounting.SubjectPeriodClosure,
+	accounting.SubjectCompanyConfigured,
+	accounting.SubjectAccountAdded,
+	accounting.SubjectBranchAdded,
+	accounting.SubjectPeriodAdded,
 }
 
 // accountingBus is the NATS JetStream backed bookkeeping.EventBus for the
@@ -50,28 +54,27 @@ func NewAccountingBus(ctx context.Context, cfg Config) (bookkeeping.EventBus, er
 	return &accountingBus{bus: b}, nil
 }
 
-// Publish encodes evt, publishes it to the subject from evt.EventSubject(),
-// and returns the broker-stamped event. The optimistic-concurrency hint is
-// forwarded as Nats-Expected-Last-Subject-Sequence; a stale hint surfaces as
+// Publish encodes evt and publishes it to the subject from evt.EventSubject().
+// The optimistic-concurrency hint is forwarded as
+// Nats-Expected-Last-Subject-Sequence; a stale hint surfaces as
 // accounting.ErrConcurrentUpdate.
-func (a *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expect accounting.ExpectedSequence) (bookkeeping.Event, error) {
+func (a *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expect accounting.ExpectedSequence) error {
 	subject := evt.EventSubject()
 	body, err := encodeEvent(evt)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	opts := []jetstream.PublishOpt{}
 	if expect.Subject != "" {
 		opts = append(opts, jetstream.WithExpectLastSequencePerSubject(expect.LastSeq))
 	}
-	seq, err := a.bus.publishRaw(ctx, subject, body, opts...)
-	if err != nil {
+	if _, err := a.bus.publishRaw(ctx, subject, body, opts...); err != nil {
 		if isWrongLastSequence(err) {
-			return nil, accounting.ErrConcurrentUpdate
+			return accounting.ErrConcurrentUpdate
 		}
-		return nil, fmt.Errorf("nats: publish: %w", err)
+		return fmt.Errorf("nats: publish: %w", err)
 	}
-	return stamp(evt, subject, seq), nil
+	return nil
 }
 
 // Subscribe installs router as the dispatch table and starts the consume
@@ -130,96 +133,50 @@ func (a *accountingBus) Close() error {
 	return a.bus.close()
 }
 
-// encodeEvent JSON-encodes a known accounting event. Subject and Sequence
-// have the json:"-" tag on the concrete types so they are excluded from the
-// body and resupplied by the broker.
+// encodeEvent JSON-encodes a known accounting event; the json:"-" Subject and
+// Sequence are not part of the event types, so the body is just the payload.
 func encodeEvent(evt bookkeeping.Event) ([]byte, error) {
-	switch e := evt.(type) {
-	case accounting.JournalPosted:
-		return encodeJournalPosted(e)
-	case accounting.PeriodClosure:
-		return encodePeriodClosure(e)
+	switch evt.(type) {
+	case accounting.JournalPosted, accounting.PeriodClosure,
+		accounting.CompanyConfigured, accounting.AccountAdded,
+		accounting.BranchAdded, accounting.PeriodAdded:
+		body, err := json.Marshal(evt)
+		if err != nil {
+			return nil, fmt.Errorf("nats: marshal %s: %w", evt.EventSubject(), err)
+		}
+		return body, nil
 	default:
 		return nil, fmt.Errorf("nats: unknown event type %T for subject %q", evt, evt.EventSubject())
 	}
 }
 
-func encodeJournalPosted(evt accounting.JournalPosted) ([]byte, error) {
-	body, err := json.Marshal(evt)
-	if err != nil {
-		return nil, fmt.Errorf("nats: marshal journal posted: %w", err)
-	}
-	return body, nil
-}
-
-func encodePeriodClosure(evt accounting.PeriodClosure) ([]byte, error) {
-	body, err := json.Marshal(evt)
-	if err != nil {
-		return nil, fmt.Errorf("nats: marshal period closure: %w", err)
-	}
-	return body, nil
-}
-
 // decodeMsg returns the typed event a JetStream message carries, picking the
-// concrete type by the message's subject.
+// concrete type by the message's subject. The transport sequence is not carried
+// on the event; the dispatch reads it from the message metadata into EventMeta.
 func decodeMsg(msg jetstream.Msg) (bookkeeping.Event, error) {
-	meta, err := msg.Metadata()
-	if err != nil {
-		return nil, fmt.Errorf("nats: msg metadata: %w", err)
-	}
-	subject := msg.Subject()
-	seq := meta.Sequence.Stream
-	switch subject {
+	body := msg.Data()
+	switch subject := msg.Subject(); subject {
 	case accounting.SubjectJournalPosted:
-		evt, err := decodeJournalPosted(msg.Data(), subject, seq)
-		if err != nil {
-			return nil, err
-		}
-		return evt, nil
+		return decodeBody[accounting.JournalPosted](body)
 	case accounting.SubjectPeriodClosure:
-		evt, err := decodePeriodClosure(msg.Data(), subject, seq)
-		if err != nil {
-			return nil, err
-		}
-		return evt, nil
+		return decodeBody[accounting.PeriodClosure](body)
+	case accounting.SubjectCompanyConfigured:
+		return decodeBody[accounting.CompanyConfigured](body)
+	case accounting.SubjectAccountAdded:
+		return decodeBody[accounting.AccountAdded](body)
+	case accounting.SubjectBranchAdded:
+		return decodeBody[accounting.BranchAdded](body)
+	case accounting.SubjectPeriodAdded:
+		return decodeBody[accounting.PeriodAdded](body)
 	default:
 		return nil, fmt.Errorf("nats: unknown subject %q", subject)
 	}
 }
 
-func decodeJournalPosted(body []byte, subject string, sequence uint64) (accounting.JournalPosted, error) {
-	var evt accounting.JournalPosted
+func decodeBody[T bookkeeping.Event](body []byte) (bookkeeping.Event, error) {
+	var evt T
 	if err := json.Unmarshal(body, &evt); err != nil {
-		return accounting.JournalPosted{}, fmt.Errorf("nats: unmarshal journal posted: %w", err)
+		return nil, fmt.Errorf("nats: unmarshal event: %w", err)
 	}
-	evt.Subject = subject
-	evt.Sequence = sequence
 	return evt, nil
-}
-
-func decodePeriodClosure(body []byte, subject string, sequence uint64) (accounting.PeriodClosure, error) {
-	var evt accounting.PeriodClosure
-	if err := json.Unmarshal(body, &evt); err != nil {
-		return accounting.PeriodClosure{}, fmt.Errorf("nats: unmarshal period closure: %w", err)
-	}
-	evt.Subject = subject
-	evt.Sequence = sequence
-	return evt, nil
-}
-
-// stamp writes the transport-assigned Subject and Sequence onto whichever
-// concrete type backs evt and returns it through the Event interface.
-func stamp(evt bookkeeping.Event, subject string, sequence uint64) bookkeeping.Event {
-	switch e := evt.(type) {
-	case accounting.JournalPosted:
-		e.Subject = subject
-		e.Sequence = sequence
-		return e
-	case accounting.PeriodClosure:
-		e.Subject = subject
-		e.Sequence = sequence
-		return e
-	default:
-		return evt
-	}
 }

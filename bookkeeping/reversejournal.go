@@ -36,21 +36,16 @@ func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (acc
 	if err != nil {
 		return accounting.JournalEntry{}, err
 	}
-	dispatched, err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
+	if err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
 		Entry:     entry,
 		Relations: []accounting.JournalRelation{rel},
 	}, accounting.ExpectedSequence{
 		Subject: subject,
 		LastSeq: lastSeq,
-	})
-	if err != nil {
+	}); err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publish: %w", err)
 	}
-	posted, ok := dispatched.(accounting.JournalPosted)
-	if !ok {
-		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publisher returned %T, want JournalPosted", dispatched)
-	}
-	return posted.Entry, nil
+	return entry, nil
 }
 
 // Handle validates intent and, if clean, executes it.
