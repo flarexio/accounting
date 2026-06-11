@@ -147,6 +147,26 @@ A posted `JournalEntry` is immutable. Corrections are represented as new journal
 
 `PostJournal` numbers the entry `JE-{EntryCount+1}` — a dense, transport-independent count of journal entries, separate from the per-subject stream sequence it passes as the optimistic-concurrency hint (the two diverge once the stream also carries non-journal events such as seeded reference data). It stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `AppendEntry` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
 
+## Optimistic Concurrency
+
+Concurrent producers on the same subject (two `PostJournal` calls racing on `accounting.journal`, two closings on `accounting.period.closure`) are serialized at the broker, not in postgres. The mechanism is a per-subject compare-and-set:
+
+```text
+producer reads LastSequence(subject) from the projection   ── the expected last sequence
+-> publishes JournalPosted with ExpectedSequence{Subject, LastSeq}
+-> NATS adapter sets Nats-Expected-Last-Subject-Sequence (WithExpectLastSequencePerSubject)
+-> JetStream accepts only if subject's actual last sequence == LastSeq
+   ├── match    -> appended, sequence advances, projection applies the event
+   └── mismatch -> rejected with WrongLastSequence; the producer retries on the fresh read model
+```
+
+Two properties make this safe:
+
+- **The broker is the authority, not the projection.** Postgres is a disposable read model; it never adjudicates a write. JetStream owns the per-subject sequence, so the check is against the authoritative log even while a projection lags behind it.
+- **Read order is load-bearing.** A producer reads `LastSequence` *before* it reads any count it needs (`EntryCount` for the dense `JE-NNNN` number). If the projection is behind, `LastSequence` is stale-low, the expected sequence is wrong, and the broker rejects the publish — the entry is never written with a number derived from a stale count. Lag can only cause a safe rejection-and-retry, never a silent gap or duplicate. (Reverse the read order and a stale count could ride through on a publish the broker still accepts.)
+
+This sequence is concurrency control only. It is deliberately *not* the entry number: on NATS `LastSequence` is the global stream position for the subject, inflated by every non-journal event (seeded reference data), so `JE-NNNN` is derived from `EntryCount + 1` instead — see [Posting And Immutability](#posting-and-immutability).
+
 ## Branches
 
 Branches are reporting dimensions on journal lines. They share the same ledger and are validated as known dimensions. They are deliberately not separate ledger instances, which prevents branch-level shadow accounting from appearing inside the core model.
