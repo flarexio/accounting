@@ -83,7 +83,7 @@ type model struct {
 func newModel(ctx context.Context, options []Option) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type a request and press Enter"
-	ti.Prompt = "> "
+	ti.Prompt = "❯ "
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -332,8 +332,8 @@ func (m *model) layout() {
 		return
 	}
 	m.input.SetWidth(max(m.width-6, 10))
-	// header (1) + blank (1) + status (1) + input (1) + footer (1) + margins.
-	h := max(m.height-7, 3)
+	// header + divider + status + input + divider + footer + margins.
+	h := max(m.height-9, 3)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(h)
 	m.ensureMarkdown()
@@ -376,32 +376,41 @@ func eventLineKind(k llm.EventKind) lineKind {
 	}
 }
 
-func lineMeta(k lineKind) (string, lipgloss.Style) {
+func roleLabel(k lineKind) string {
 	switch k {
 	case lineUser:
-		return "you", userStyle
+		return "you"
 	case lineModel:
-		return "model", modelStyle
+		return "model"
 	case lineValidation:
-		return "rejected", validationStyle
+		return "rejected"
 	case lineExecution:
-		return "exec error", executionStyle
+		return "exec error"
 	case lineObservation:
-		return "observation", observationStyle
+		return "observation"
 	case lineTool:
-		return "tool", toolStyle
+		return "tool"
 	case linePreview:
-		return "preview", previewStyle
+		return "preview"
 	case lineError:
-		return "error", errorStyle
+		return "error"
 	default:
-		return "·", systemStyle
+		return "system"
 	}
+}
+
+// renderLabel is the role tag above a transcript body: a filled badge for the
+// meaningful kinds, a subtle marker for system notes.
+func renderLabel(k lineKind) string {
+	if k == lineSystem {
+		return systemStyle.Render("· " + roleLabel(k))
+	}
+	return badge(roleLabel(k), roleColor[k])
 }
 
 func (m model) renderTranscript() string {
 	if len(m.lines) == 0 {
-		return hintStyle.Render("No turns yet. Type a request below to start.")
+		return hintStyle.Render("No turns yet — type a request below to start.")
 	}
 	width := max(m.viewport.Width()-2, 20)
 	var b strings.Builder
@@ -409,8 +418,7 @@ func (m model) renderTranscript() string {
 		if i > 0 {
 			b.WriteString("\n\n")
 		}
-		label, style := lineMeta(l.kind)
-		b.WriteString(style.Render(label))
+		b.WriteString(renderLabel(l.kind))
 		b.WriteString("\n")
 		b.WriteString(m.renderBody(l, width))
 	}
@@ -452,13 +460,15 @@ func (m model) View() tea.View {
 
 func (m model) selectView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Accounting - choose your working branch"))
+	b.WriteString(titleStyle.Render("Accounting — choose your working branch"))
+	b.WriteString("\n")
+	b.WriteString(divider(min(m.width, 60)))
 	b.WriteString("\n\n")
 	for i, opt := range m.options {
 		cursor := "  "
 		label := opt.Label
 		if i == m.cursor {
-			cursor = cursorStyle.Render("> ")
+			cursor = cursorStyle.Render("❯ ")
 			label = selectedStyle.Render(label)
 		}
 		b.WriteString(cursor)
@@ -470,7 +480,11 @@ func (m model) selectView() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("↑/↓ move · enter start · q quit"))
+	b.WriteString(keyHints(
+		[2]string{"↑/↓", "move"},
+		[2]string{"enter", "start"},
+		[2]string{"q", "quit"},
+	))
 	return b.String()
 }
 
@@ -482,19 +496,26 @@ func (m model) chatView() string {
 
 	status := " "
 	if m.running {
-		status = m.spinner.View() + " running… (ctrl+c cancels this turn)"
+		status = systemStyle.Render(m.spinner.View()+" running… ") + hintStyle.Render("(ctrl+c cancels this turn)")
 	}
 
-	footer := "enter send · pgup/pgdn scroll · esc back · ctrl+c quit"
+	footer := keyHints(
+		[2]string{"enter", "send"},
+		[2]string{"pgup/pgdn", "scroll"},
+		[2]string{"esc", "back"},
+		[2]string{"ctrl+c", "quit"},
+	)
 	if m.running {
-		footer = "ctrl+c cancel turn"
+		footer = keyHints([2]string{"ctrl+c", "cancel turn"})
 	}
 
 	return strings.Join([]string{
 		header,
+		divider(m.width),
 		m.viewport.View(),
-		systemStyle.Render(status),
+		status,
 		m.input.View(),
-		footerStyle.Render(footer),
+		divider(m.width),
+		footer,
 	}, "\n")
 }
