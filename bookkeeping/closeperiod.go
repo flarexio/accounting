@@ -239,6 +239,10 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 	if err != nil {
 		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: read last sequence: %w", err)
 	}
+	count, err := uc.Repo.EntryCount(ctx)
+	if err != nil {
+		return accounting.Period{}, nil, false, fmt.Errorf("bookkeeping: read entry count: %w", err)
+	}
 	postedAt := uc.now()
 	currency := inferCurrency(entries)
 	validator := accounting.Validator{Repo: uc.Repo}
@@ -317,11 +321,11 @@ func (uc ClosePeriod) prepare(ctx context.Context, intent ClosePeriodIntent) (ac
 
 		// Pre-assign the entry ID and PostedAt so Execute publishes a
 		// fully-formed entry. Each successive publish advances the broker's
-		// stream sequence by one, so plan i expects lastSeq + i and assigns
-		// JE-{lastSeq+i+1}.
+		// stream sequence by one, so plan i expects lastSeq + i (the concurrency
+		// hint); its dense entry number is count + i + 1.
 		expectLast := lastSeq + uint64(len(plans))
 		entry := accounting.JournalEntry{
-			ID:          accounting.FormatEntryID(expectLast + 1),
+			ID:          accounting.FormatEntryID(count + uint64(len(plans)) + 1),
 			Date:        closeIntent.Date,
 			PeriodID:    closeIntent.PeriodID,
 			Currency:    closeIntent.Currency,

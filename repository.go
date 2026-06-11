@@ -20,6 +20,12 @@ type LedgerRepository interface {
 	// EntriesByPeriod returns every posted entry whose PeriodID matches.
 	EntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error)
 
+	// EntryCount returns the number of posted journal entries; the journal is
+	// append-only, so the next entry's number is EntryCount + 1. This is the
+	// dense, transport-independent basis for JournalEntry.ID, separate from the
+	// per-subject stream sequence used for optimistic concurrency.
+	EntryCount(ctx context.Context) (uint64, error)
+
 	// Company returns the single company; >1 row is an error.
 	Company(ctx context.Context) (Company, bool, error)
 
