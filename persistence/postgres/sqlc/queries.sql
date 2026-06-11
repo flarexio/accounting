@@ -68,17 +68,17 @@ SET start_on = EXCLUDED.start_on,
 UPDATE periods SET status = $2 WHERE id = $1;
 
 -- name: GetEntry :one
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 WHERE id = $1;
 
 -- name: ListEntries :many
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 ORDER BY sequence;
 
 -- name: ListEntriesByPeriod :many
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 WHERE period_id = $1
 ORDER BY sequence;
@@ -101,8 +101,8 @@ ORDER BY entry_id, line_no;
 -- violations. Entry.ID is derived from the broker sequence so duplicates
 -- collapse to the same row.
 INSERT INTO journal_entries (
-    id, sequence, subject, entry_date, period_id, currency, description, posted_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, sequence, entry_date, period_id, currency, description, posted_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING;
 
 -- name: InsertLine :exec

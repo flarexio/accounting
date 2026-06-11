@@ -69,6 +69,7 @@ func (b *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expe
 	if handler == nil {
 		return stamped, nil
 	}
+	ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: subject, Sequence: seq})
 	if err := handler.Handle(ctx, stamped); err != nil {
 		return stamped, err
 	}

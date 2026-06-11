@@ -43,18 +43,13 @@ CREATE TABLE subject_offsets (
 
 CREATE TABLE journal_entries (
     id          TEXT PRIMARY KEY,
-    sequence    BIGINT NOT NULL,
-    subject     TEXT NOT NULL,
+    sequence    BIGINT NOT NULL UNIQUE,
     entry_date  DATE NOT NULL,
     period_id   TEXT NOT NULL,
     currency    TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
-    posted_at   TIMESTAMPTZ NOT NULL,
-    UNIQUE (subject, sequence)
+    posted_at   TIMESTAMPTZ NOT NULL
 );
-
-CREATE INDEX journal_entries_subject_seq_idx
-    ON journal_entries (subject, sequence);
 
 CREATE TABLE journal_lines (
     entry_id     TEXT   NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,

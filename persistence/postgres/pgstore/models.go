@@ -31,7 +31,6 @@ type Company struct {
 type JournalEntry struct {
 	ID          string
 	Sequence    int64
-	Subject     string
 	EntryDate   pgtype.Date
 	PeriodID    string
 	Currency    string

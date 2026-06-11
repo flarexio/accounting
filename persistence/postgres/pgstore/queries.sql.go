@@ -43,7 +43,7 @@ func (q *Queries) GetBranch(ctx context.Context, id string) (Branch, error) {
 }
 
 const getEntry = `-- name: GetEntry :one
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 WHERE id = $1
 `
@@ -54,7 +54,6 @@ func (q *Queries) GetEntry(ctx context.Context, id string) (JournalEntry, error)
 	err := row.Scan(
 		&i.ID,
 		&i.Sequence,
-		&i.Subject,
 		&i.EntryDate,
 		&i.PeriodID,
 		&i.Currency,
@@ -119,15 +118,14 @@ func (q *Queries) GetRelation(ctx context.Context, arg GetRelationParams) (Journ
 
 const insertEntry = `-- name: InsertEntry :exec
 INSERT INTO journal_entries (
-    id, sequence, subject, entry_date, period_id, currency, description, posted_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, sequence, entry_date, period_id, currency, description, posted_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
 `
 
 type InsertEntryParams struct {
 	ID          string
 	Sequence    int64
-	Subject     string
 	EntryDate   pgtype.Date
 	PeriodID    string
 	Currency    string
@@ -143,7 +141,6 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 	_, err := q.db.Exec(ctx, insertEntry,
 		arg.ID,
 		arg.Sequence,
-		arg.Subject,
 		arg.EntryDate,
 		arg.PeriodID,
 		arg.Currency,
@@ -304,7 +301,7 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 ORDER BY sequence
 `
@@ -321,7 +318,6 @@ func (q *Queries) ListEntries(ctx context.Context) ([]JournalEntry, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Sequence,
-			&i.Subject,
 			&i.EntryDate,
 			&i.PeriodID,
 			&i.Currency,
@@ -339,7 +335,7 @@ func (q *Queries) ListEntries(ctx context.Context) ([]JournalEntry, error) {
 }
 
 const listEntriesByPeriod = `-- name: ListEntriesByPeriod :many
-SELECT id, sequence, subject, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
 WHERE period_id = $1
 ORDER BY sequence
@@ -357,7 +353,6 @@ func (q *Queries) ListEntriesByPeriod(ctx context.Context, periodID string) ([]J
 		if err := rows.Scan(
 			&i.ID,
 			&i.Sequence,
-			&i.Subject,
 			&i.EntryDate,
 			&i.PeriodID,
 			&i.Currency,
