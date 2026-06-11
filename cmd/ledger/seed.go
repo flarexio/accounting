@@ -79,6 +79,11 @@ func runSeed(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "seeded %s (%s): %d account(s), %d branch(es), %d period(s)\n",
 			s.Company.ID, s.Company.Name, len(s.Accounts), len(s.Branches), len(s.Periods))
 	}
+	// Wait for the projection to reflect the published events before exiting,
+	// so the seeded chart is queryable as soon as `ledger seed` returns.
+	if err := bus.CatchUp(ctx); err != nil {
+		return fmt.Errorf("seed: %w", err)
+	}
 	return nil
 }
 

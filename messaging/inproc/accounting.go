@@ -37,6 +37,12 @@ func (b *accountingBus) Subscribe(router *bookkeeping.Router) error {
 	return nil
 }
 
+// CatchUp is a no-op: the in-process bus dispatches synchronously on Publish,
+// so the projection is always current.
+func (b *accountingBus) CatchUp(context.Context) error {
+	return nil
+}
+
 // Close is a no-op: the in-process bus owns nothing.
 func (b *accountingBus) Close() error {
 	return nil

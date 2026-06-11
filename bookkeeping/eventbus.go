@@ -38,9 +38,12 @@ type Publisher interface {
 
 // Subscriber installs a Router as the sole subscription point for the bus.
 // A transport calls back into the router on every delivered message to look
-// up the registered handler.
+// up the registered handler. CatchUp blocks until the projection has processed
+// every event currently in the stream, so a reader sees the latest state; on a
+// synchronous transport it is a no-op.
 type Subscriber interface {
 	Subscribe(router *Router) error
+	CatchUp(ctx context.Context) error
 }
 
 // EventBus is the bidirectional transport contract for the bookkeeping flow.
