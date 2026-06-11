@@ -208,6 +208,12 @@ func (r *Repository) Entries(_ context.Context) ([]accounting.JournalEntry, erro
 	return out, nil
 }
 
+func (r *Repository) EntryCount(_ context.Context) (uint64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return uint64(len(r.entries)), nil
+}
+
 func (r *Repository) EntriesByPeriod(_ context.Context, periodID string) ([]accounting.JournalEntry, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -47,15 +47,20 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 		clock = func() time.Time { return time.Now().UTC() }
 	}
 
-	// lastSeq+1 is both the optimistic-concurrency hint and the new entry's ID:
-	// AppendEntry writes the entry and bumps the subject offset in one transaction.
+	// lastSeq is the per-subject stream sequence (the optimistic-concurrency
+	// hint); the entry number is the dense count of journal entries. They differ
+	// once the stream also carries non-journal events, so they are read separately.
 	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
 	if err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: read last sequence: %w", err)
 	}
+	count, err := uc.Repo.EntryCount(ctx)
+	if err != nil {
+		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: read entry count: %w", err)
+	}
 
 	entry := accounting.JournalEntry{
-		ID:          accounting.FormatEntryID(lastSeq + 1),
+		ID:          accounting.FormatEntryID(count + 1),
 		Date:        intent.Date,
 		PeriodID:    intent.PeriodID,
 		Currency:    intent.Currency,

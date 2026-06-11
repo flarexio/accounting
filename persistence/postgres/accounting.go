@@ -293,6 +293,17 @@ func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.Journa
 	return r.attachLines(ctx, rows)
 }
 
+func (r *accountingRepository) EntryCount(ctx context.Context) (uint64, error) {
+	n, err := r.q.CountEntries(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("postgres: CountEntries: %w", err)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("postgres: negative entry count %d", n)
+	}
+	return uint64(n), nil
+}
+
 // EntriesByPeriod returns posted entries filtered to periodID in the database,
 // each with its lines populated.
 func (r *accountingRepository) EntriesByPeriod(ctx context.Context, periodID string) ([]accounting.JournalEntry, error) {

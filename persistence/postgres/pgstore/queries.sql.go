@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countEntries = `-- name: CountEntries :one
+SELECT count(*) FROM journal_entries
+`
+
+func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countEntries)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT code, name, type, active
 FROM accounts
