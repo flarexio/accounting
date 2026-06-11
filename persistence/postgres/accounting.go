@@ -364,6 +364,37 @@ func (r *accountingRepository) PutPeriod(ctx context.Context, p accounting.Perio
 	return nil
 }
 
+// SetPeriodStatus transitions the named period's status and advances LastSequence
+// from any EventMeta in the context, in one transaction. An unknown id is an error.
+func (r *accountingRepository) SetPeriodStatus(ctx context.Context, periodID string, status accounting.PeriodStatus) error {
+	meta, _ := accounting.EventMetaFrom(ctx)
+
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("postgres: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := r.q.WithTx(tx)
+	rows, err := q.UpdatePeriodStatus(ctx, pgstore.UpdatePeriodStatusParams{
+		ID:     periodID,
+		Status: string(status),
+	})
+	if err != nil {
+		return fmt.Errorf("postgres: UpdatePeriodStatus: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("postgres: SetPeriodStatus: period %q does not exist", periodID)
+	}
+	if err := upsertSequence(ctx, q, meta); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("postgres: commit: %w", err)
+	}
+	return nil
+}
+
 func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branch) error {
 	if err := r.q.UpsertBranch(ctx, pgstore.UpsertBranchParams{
 		ID:       b.ID,
@@ -375,10 +406,11 @@ func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branc
 	return nil
 }
 
-// Apply writes the entry, its lines, every JournalRelation in evt.Relations,
-// and the new last-sequence record in one transaction, so a concurrent reader
-// cannot see the entry without its relations or its sequence.
-func (r *accountingRepository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
+// AppendEntry writes the entry, its lines, and relations in one transaction,
+// recording the sequence from any EventMeta in the context.
+func (r *accountingRepository) AppendEntry(ctx context.Context, entry accounting.JournalEntry, relations []accounting.JournalRelation) error {
+	meta, _ := accounting.EventMetaFrom(ctx)
+
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("postgres: begin tx: %w", err)
@@ -387,58 +419,28 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 
 	q := r.q.WithTx(tx)
 
-	entry := evt.Entry
-	if err := q.InsertEntry(ctx, pgstore.InsertEntryParams{
-		ID:          entry.ID,
-		Sequence:    int64(evt.Sequence),
-		Subject:     evt.Subject,
-		EntryDate:   pgtype.Date{Time: entry.Date.Time(time.UTC), Valid: true},
-		PeriodID:    entry.PeriodID,
-		Currency:    entry.Currency,
-		Description: entry.Description,
-		PostedAt:    pgtype.Timestamptz{Time: entry.PostedAt, Valid: true},
-	}); err != nil {
+	if err := q.InsertEntry(ctx, insertEntryParams(entry, meta)); err != nil {
 		return fmt.Errorf("postgres: InsertEntry: %w", err)
 	}
 
 	for idx, line := range entry.Lines {
-		tags, err := marshalAccountingTags(line.Dimensions.Tags)
+		params, err := insertLineParams(entry.ID, idx, line)
 		if err != nil {
 			return err
 		}
-		if err := q.InsertLine(ctx, pgstore.InsertLineParams{
-			EntryID:     entry.ID,
-			LineNo:      int32(idx),
-			AccountCode: line.AccountCode,
-			Side:        string(line.Side),
-			Amount:      line.Amount,
-			Memo:        line.Memo,
-			BranchID:    line.Dimensions.BranchID,
-			Tags:        tags,
-		}); err != nil {
+		if err := q.InsertLine(ctx, params); err != nil {
 			return fmt.Errorf("postgres: InsertLine: %w", err)
 		}
 	}
 
-	for _, rel := range evt.Relations {
-		if err := q.InsertRelation(ctx, pgstore.InsertRelationParams{
-			FromEntry: rel.FromEntry,
-			ToEntry:   rel.ToEntry,
-			Type:      string(rel.Type),
-			Reason:    string(rel.Reason),
-			Note:      rel.Note,
-		}); err != nil {
+	for _, rel := range relations {
+		if err := q.InsertRelation(ctx, insertRelationParams(rel)); err != nil {
 			return fmt.Errorf("postgres: InsertRelation: %w", err)
 		}
 	}
 
-	if evt.Subject != "" {
-		if err := q.UpsertLastSequence(ctx, pgstore.UpsertLastSequenceParams{
-			Subject:      evt.Subject,
-			LastSequence: int64(evt.Sequence),
-		}); err != nil {
-			return fmt.Errorf("postgres: UpsertLastSequence: %w", err)
-		}
+	if err := upsertSequence(ctx, q, meta); err != nil {
+		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -447,42 +449,56 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 	return nil
 }
 
-// ApplyPeriodClosure flips the named period to closed and advances
-// LastSequence for evt.Subject in one transaction so a concurrent reader
-// cannot observe the period flip without its sequence. An unknown period id
-// is an error so an event for a never-seeded period does not silently
-// disappear.
-func (r *accountingRepository) ApplyPeriodClosure(ctx context.Context, evt accounting.PeriodClosure) error {
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+func insertEntryParams(entry accounting.JournalEntry, meta accounting.EventMeta) pgstore.InsertEntryParams {
+	return pgstore.InsertEntryParams{
+		ID:          entry.ID,
+		Sequence:    int64(meta.Sequence),
+		EntryDate:   pgtype.Date{Time: entry.Date.Time(time.UTC), Valid: true},
+		PeriodID:    entry.PeriodID,
+		Currency:    entry.Currency,
+		Description: entry.Description,
+		PostedAt:    pgtype.Timestamptz{Time: entry.PostedAt, Valid: true},
+	}
+}
+
+func insertLineParams(entryID string, idx int, line accounting.JournalLine) (pgstore.InsertLineParams, error) {
+	tags, err := marshalAccountingTags(line.Dimensions.Tags)
 	if err != nil {
-		return fmt.Errorf("postgres: begin tx: %w", err)
+		return pgstore.InsertLineParams{}, err
 	}
-	defer tx.Rollback(ctx)
+	return pgstore.InsertLineParams{
+		EntryID:     entryID,
+		LineNo:      int32(idx),
+		AccountCode: line.AccountCode,
+		Side:        string(line.Side),
+		Amount:      line.Amount,
+		Memo:        line.Memo,
+		BranchID:    line.Dimensions.BranchID,
+		Tags:        tags,
+	}, nil
+}
 
-	q := r.q.WithTx(tx)
-
-	rows, err := q.UpdatePeriodStatus(ctx, pgstore.UpdatePeriodStatusParams{
-		ID:     evt.Period.ID,
-		Status: string(accounting.PeriodClosed),
-	})
-	if err != nil {
-		return fmt.Errorf("postgres: UpdatePeriodStatus: %w", err)
+func insertRelationParams(rel accounting.JournalRelation) pgstore.InsertRelationParams {
+	return pgstore.InsertRelationParams{
+		FromEntry: rel.FromEntry,
+		ToEntry:   rel.ToEntry,
+		Type:      string(rel.Type),
+		Reason:    string(rel.Reason),
+		Note:      rel.Note,
 	}
-	if rows == 0 {
-		return fmt.Errorf("postgres: ApplyPeriodClosure: period %q does not exist", evt.Period.ID)
-	}
+}
 
-	if evt.Subject != "" {
-		if err := q.UpsertLastSequence(ctx, pgstore.UpsertLastSequenceParams{
-			Subject:      evt.Subject,
-			LastSequence: int64(evt.Sequence),
-		}); err != nil {
-			return fmt.Errorf("postgres: UpsertLastSequence: %w", err)
-		}
+// upsertSequence advances LastSequence for meta.Subject, or does nothing when
+// the subject is empty.
+func upsertSequence(ctx context.Context, q *pgstore.Queries, meta accounting.EventMeta) error {
+	if meta.Subject == "" {
+		return nil
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("postgres: commit: %w", err)
+	if err := q.UpsertLastSequence(ctx, pgstore.UpsertLastSequenceParams{
+		Subject:      meta.Subject,
+		LastSequence: int64(meta.Sequence),
+	}); err != nil {
+		return fmt.Errorf("postgres: UpsertLastSequence: %w", err)
 	}
 	return nil
 }

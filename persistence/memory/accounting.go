@@ -253,6 +253,21 @@ func (r *Repository) PutPeriod(_ context.Context, p accounting.Period) error {
 	return nil
 }
 
+// SetPeriodStatus transitions the named period's status under one mutex,
+// advancing LastSequence from any EventMeta in the context. An unknown id is an error.
+func (r *Repository) SetPeriodStatus(ctx context.Context, periodID string, status accounting.PeriodStatus) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.periods[periodID]
+	if !ok {
+		return fmt.Errorf("memory: SetPeriodStatus: period %q does not exist", periodID)
+	}
+	p.Status = status
+	r.periods[periodID] = p
+	r.advanceSequence(ctx)
+	return nil
+}
+
 func (r *Repository) PutBranch(_ context.Context, b accounting.Branch) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -260,38 +275,29 @@ func (r *Repository) PutBranch(_ context.Context, b accounting.Branch) error {
 	return nil
 }
 
-// Apply writes the entry, every relation in evt.Relations, and advances
-// LastSequence for evt.Subject under one mutex so a concurrent reader cannot
-// see the entry without its relations or its sequence.
-func (r *Repository) Apply(_ context.Context, evt accounting.JournalPosted) error {
+// AppendEntry writes the entry and its relations under one mutex, advancing
+// LastSequence from any EventMeta in the context.
+func (r *Repository) AppendEntry(ctx context.Context, entry accounting.JournalEntry, relations []accounting.JournalRelation) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	stored := cloneAccountingEntry(evt.Entry)
+	stored := cloneAccountingEntry(entry)
 	r.entries = append(r.entries, stored)
 	r.entryIdx[stored.ID] = len(r.entries) - 1
-	r.relations = append(r.relations, evt.Relations...)
-	if evt.Subject != "" && evt.Sequence > r.lastSeq[evt.Subject] {
-		r.lastSeq[evt.Subject] = evt.Sequence
-	}
+	r.relations = append(r.relations, relations...)
+	r.advanceSequence(ctx)
 	return nil
 }
 
-// ApplyPeriodClosure flips the named period to closed and advances
-// LastSequence for evt.Subject under one mutex. An unknown period id is an
-// error so an event for a never-seeded period does not silently disappear.
-func (r *Repository) ApplyPeriodClosure(_ context.Context, evt accounting.PeriodClosure) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	p, ok := r.periods[evt.Period.ID]
-	if !ok {
-		return fmt.Errorf("memory: ApplyPeriodClosure: period %q does not exist", evt.Period.ID)
+// advanceSequence bumps LastSequence from the context's EventMeta when present.
+// The caller holds the write lock.
+func (r *Repository) advanceSequence(ctx context.Context) {
+	meta, ok := accounting.EventMetaFrom(ctx)
+	if !ok || meta.Subject == "" {
+		return
 	}
-	p.Status = accounting.PeriodClosed
-	r.periods[evt.Period.ID] = p
-	if evt.Subject != "" && evt.Sequence > r.lastSeq[evt.Subject] {
-		r.lastSeq[evt.Subject] = evt.Sequence
+	if meta.Sequence > r.lastSeq[meta.Subject] {
+		r.lastSeq[meta.Subject] = meta.Sequence
 	}
-	return nil
 }
 
 // ClearJournals drops every posted entry, every relation, and resets

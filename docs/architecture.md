@@ -16,7 +16,7 @@ bookkeeping request
 -> validation or execution errors become feedback for the next reasoning turn
 ```
 
-The bookkeeping layer does not mutate the projection directly. Producers validate and publish events; the subscribed `Apply` handler is the single writer to the `LedgerRepository` projection. This keeps command handling, event publication, and projection state separate enough to test each part directly.
+The bookkeeping layer does not mutate the projection directly. Producers validate and publish events; subscribed projection handlers are the single writers to the `LedgerRepository`. A handler maps each delivered event to domain models and persists them through the repository's domain-typed methods — the port never takes an event type, and the broker sequence travels in the context as `accounting.EventMeta`. This keeps command handling, event publication, projection mapping, and projection state separate enough to test each part directly.
 
 ## Domain Model
 
@@ -52,9 +52,9 @@ Reference data (seeded; read by the validator)
    └──────────────────────────────────────────────┘
 
 
-Transient (lives only between validation and Apply)
+Transient (lives only between validation and projection)
 ┌──────────────────┐
-│  JournalIntent   │  ── Validator + Apply ──►  becomes a JournalEntry
+│  JournalIntent   │  ── Validator + post ──►  becomes a JournalEntry
 └──────────────────┘
 
 
@@ -63,7 +63,7 @@ Integration event
   ├── entry      : JournalEntry
   └── relations  : [JournalRelation]  0..*
 
-  ── Apply (single writer) ──►  LedgerRepository projection
+  ── handler maps to domain, AppendEntry (single writer) ──►  LedgerRepository projection
 ```
 
 **Aggregates.** `Company` is a singleton aggregate. `JournalEntry` is the posting aggregate root and seals its `JournalLine` value objects on post. `JournalRelation` is its own aggregate that references two `JournalEntry` roots without belonging to either — this is what lets one entry be referenced by many later entries (M:N).
@@ -72,9 +72,9 @@ Integration event
 
 **Value objects.** `JournalLine` and `Dimensions` have no identity of their own; they live and die with their parent `JournalEntry` and are compared by value. Amounts are `int64` minor units.
 
-**Intent vs entry.** `JournalIntent` is a proposed transaction with no identity; it lives only long enough to be validated and either become a `JournalEntry` (after `Apply`) or be rejected.
+**Intent vs entry.** `JournalIntent` is a proposed transaction with no identity; it lives only long enough to be validated and either become a `JournalEntry` (once the projection applies the published event) or be rejected.
 
-**Integration event.** `JournalPosted` is the only path from a use case to the projection. It carries the new `JournalEntry` and any `JournalRelation`s created with it; the subscribed `Apply` handler writes both in one transaction so the projection never observes an entry without its relations.
+**Integration event.** `JournalPosted` is the only path from a use case to the projection. It carries the new `JournalEntry` and any `JournalRelation`s created with it; the subscribed handler unwraps it to domain models and `AppendEntry` writes both in one transaction so the projection never observes an entry without its relations.
 
 ## Concepts
 
@@ -145,7 +145,7 @@ Currency precision is deliberately not validated: both `3150` and `315000` are l
 
 A posted `JournalEntry` is immutable. Corrections are represented as new journal entries, usually through `reverse_journal`, never by editing an existing posted entry in place. The new entry is linked back to the original through a `JournalRelation`, which is itself append-only — a wrong relation is corrected by appending another relation, not by editing the row.
 
-`PostJournal` derives the entry ID from the expected broker sequence, stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `Apply` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
+`PostJournal` derives the entry ID from the expected broker sequence, stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `AppendEntry` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
 
 ## Branches
 

@@ -248,7 +248,8 @@ func reversalSetup(t *testing.T) (accounting.LedgerRepository, accounting.Journa
 		},
 		PostedAt: posted,
 	}
-	if err := repo.Apply(ctx, accounting.JournalPosted{Subject: "test", Sequence: 1, Entry: original}); err != nil {
+	postCtx := accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: "test", Sequence: 1})
+	if err := repo.AppendEntry(postCtx, original, nil); err != nil {
 		t.Fatalf("seed original: %v", err)
 	}
 

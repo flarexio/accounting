@@ -7,10 +7,8 @@ import (
 	"github.com/flarexio/accounting"
 )
 
-// ApplyJournal is the projection-side handler for accounting.JournalPosted
-// events: it type-asserts the polymorphic Event delivered by the Router and
-// hands the payload to LedgerRepository.Apply, which writes the entry, its
-// lines, every JournalRelation, and the broker sequence in one transaction.
+// ApplyJournal projects accounting.JournalPosted: it unwraps the event to its
+// domain models and writes them through LedgerRepository.AppendEntry.
 type ApplyJournal struct {
 	Repo accounting.LedgerRepository
 }
@@ -21,5 +19,5 @@ func (h *ApplyJournal) Handle(ctx context.Context, evt Event) error {
 	if !ok {
 		return fmt.Errorf("bookkeeping: ApplyJournal received %T on subject %q, want JournalPosted", evt, evt.EventSubject())
 	}
-	return h.Repo.Apply(ctx, je)
+	return h.Repo.AppendEntry(ctx, je.Entry, je.Relations)
 }

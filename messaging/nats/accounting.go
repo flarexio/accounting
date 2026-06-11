@@ -116,6 +116,9 @@ func (a *accountingBus) dispatch(msg jetstream.Msg) {
 		_ = msg.Nak()
 		return
 	}
+	if meta, err := msg.Metadata(); err == nil {
+		ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: subject, Sequence: meta.Sequence.Stream})
+	}
 	if err := handler.Handle(ctx, evt); err != nil {
 		_ = msg.Nak()
 		return
@@ -220,4 +223,3 @@ func stamp(evt bookkeeping.Event, subject string, sequence uint64) bookkeeping.E
 		return evt
 	}
 }
-
