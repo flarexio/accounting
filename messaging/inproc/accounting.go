@@ -42,17 +42,17 @@ func (b *accountingBus) Close() error {
 	return nil
 }
 
-// Publish stamps the event with the subject from EventSubject and the next
-// per-subject sequence, hands the stamped event to the router, and returns
-// it. A stale ExpectedSequence is rejected before any handler runs.
-func (b *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expect accounting.ExpectedSequence) (bookkeeping.Event, error) {
+// Publish assigns the next per-subject sequence and dispatches evt to the
+// router under the EventMeta context. A stale ExpectedSequence is rejected
+// before any handler runs.
+func (b *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expect accounting.ExpectedSequence) error {
 	subject := evt.EventSubject()
 
 	b.mu.Lock()
 	if expect.Subject != "" {
 		if b.streamSeq[expect.Subject] != expect.LastSeq {
 			b.mu.Unlock()
-			return nil, accounting.ErrConcurrentUpdate
+			return accounting.ErrConcurrentUpdate
 		}
 	}
 	b.streamSeq[subject]++
@@ -60,36 +60,13 @@ func (b *accountingBus) Publish(ctx context.Context, evt bookkeeping.Event, expe
 	router := b.router
 	b.mu.Unlock()
 
-	stamped := stamp(evt, subject, seq)
-
 	if router == nil {
-		return stamped, nil
+		return nil
 	}
 	handler := router.Handler(subject)
 	if handler == nil {
-		return stamped, nil
+		return nil
 	}
 	ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: subject, Sequence: seq})
-	if err := handler.Handle(ctx, stamped); err != nil {
-		return stamped, err
-	}
-	return stamped, nil
-}
-
-// stamp returns evt with the transport-assigned Subject and Sequence written
-// onto whichever concrete type backs it. Returning the same Event interface
-// keeps the bus contract polymorphic without leaking the union types.
-func stamp(evt bookkeeping.Event, subject string, sequence uint64) bookkeeping.Event {
-	switch e := evt.(type) {
-	case accounting.JournalPosted:
-		e.Subject = subject
-		e.Sequence = sequence
-		return e
-	case accounting.PeriodClosure:
-		e.Subject = subject
-		e.Sequence = sequence
-		return e
-	default:
-		return evt
-	}
+	return handler.Handle(ctx, evt)
 }

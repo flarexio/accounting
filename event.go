@@ -12,15 +12,20 @@ const SubjectJournalPosted = "accounting.journal"
 // SubjectPeriodClosure is the bus subject PeriodClosure events are published on.
 const SubjectPeriodClosure = "accounting.period.closure"
 
+// Subjects for the reference-data events `ledger seed` emits, one per entity.
+const (
+	SubjectCompanyConfigured = "accounting.company.configured"
+	SubjectAccountAdded      = "accounting.account.added"
+	SubjectBranchAdded       = "accounting.branch.added"
+	SubjectPeriodAdded       = "accounting.period.added"
+)
+
 // JournalPosted is the domain event emitted after a JournalIntent has been
-// validated and the broker has accepted it. Subject and Sequence are
-// transport-assigned and excluded from JSON; Entry.ID is producer-assigned and
+// validated and the broker has accepted it. Entry.ID is producer-assigned and
 // carried through the body. Relations carries any JournalRelation rows built
-// alongside the entry (e.g. a reversal's link to its original); Apply writes
-// the entry and all relations in one transaction.
+// alongside the entry (e.g. a reversal's link to its original); AppendEntry
+// writes the entry and all relations in one transaction.
 type JournalPosted struct {
-	Subject   string            `json:"-"`
-	Sequence  uint64            `json:"-"`
 	Entry     JournalEntry      `json:"entry"`
 	Relations []JournalRelation `json:"relations,omitempty"`
 }
@@ -28,15 +33,47 @@ type JournalPosted struct {
 // EventSubject reports the bus subject JournalPosted lives on.
 func (JournalPosted) EventSubject() string { return SubjectJournalPosted }
 
+// CompanyConfigured, AccountAdded, BranchAdded, and PeriodAdded are the
+// reference-data events `ledger seed` emits, one per entity, for the projection
+// handlers to upsert.
+type CompanyConfigured struct {
+	Company Company `json:"company"`
+}
+
+// EventSubject reports the bus subject CompanyConfigured lives on.
+func (CompanyConfigured) EventSubject() string { return SubjectCompanyConfigured }
+
+// AccountAdded carries one chart account for the projection to upsert.
+type AccountAdded struct {
+	Account Account `json:"account"`
+}
+
+// EventSubject reports the bus subject AccountAdded lives on.
+func (AccountAdded) EventSubject() string { return SubjectAccountAdded }
+
+// BranchAdded carries one reporting branch for the projection to upsert.
+type BranchAdded struct {
+	Branch Branch `json:"branch"`
+}
+
+// EventSubject reports the bus subject BranchAdded lives on.
+func (BranchAdded) EventSubject() string { return SubjectBranchAdded }
+
+// PeriodAdded carries one accounting period for the projection to upsert.
+type PeriodAdded struct {
+	Period Period `json:"period"`
+}
+
+// EventSubject reports the bus subject PeriodAdded lives on.
+func (PeriodAdded) EventSubject() string { return SubjectPeriodAdded }
+
 // PeriodClosure is the domain event emitted by ClosePeriod after every
 // closing entry for the period has been published. The subscribed handler is
 // the only writer that flips Period.Status to closed in the projection, so
 // this is the event-sourced counterpart of JournalPosted for period state
-// transitions. Subject and Sequence are transport-assigned.
+// transitions.
 type PeriodClosure struct {
-	Subject  string `json:"-"`
-	Sequence uint64 `json:"-"`
-	Period   Period `json:"period"`
+	Period Period `json:"period"`
 }
 
 // EventSubject reports the bus subject PeriodClosure lives on.

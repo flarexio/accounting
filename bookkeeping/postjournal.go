@@ -48,7 +48,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 	}
 
 	// lastSeq+1 is both the optimistic-concurrency hint and the new entry's ID:
-	// Apply writes the entry and bumps the subject offset in one transaction.
+	// AppendEntry writes the entry and bumps the subject offset in one transaction.
 	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
 	if err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: read last sequence: %w", err)
@@ -64,18 +64,13 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 		PostedAt:    clock(),
 	}
 
-	dispatched, err := uc.Publisher.Publish(ctx, accounting.JournalPosted{Entry: entry}, accounting.ExpectedSequence{
+	if err := uc.Publisher.Publish(ctx, accounting.JournalPosted{Entry: entry}, accounting.ExpectedSequence{
 		Subject: subject,
 		LastSeq: lastSeq,
-	})
-	if err != nil {
+	}); err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publish: %w", err)
 	}
-	posted, ok := dispatched.(accounting.JournalPosted)
-	if !ok {
-		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publisher returned %T, want JournalPosted", dispatched)
-	}
-	return posted.Entry, nil
+	return entry, nil
 }
 
 // Handle validates intent and, if clean, executes it.

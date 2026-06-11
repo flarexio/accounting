@@ -32,36 +32,26 @@ func captureJournal(observed *[]accounting.JournalPosted) bookkeeping.EventHandl
 	})
 }
 
-func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
+func TestBus_PublishCarriesEntryIDAndSequenceInContext(t *testing.T) {
 	ctx := context.Background()
 	bus := inproc.NewAccountingBus()
 
 	var observed []accounting.JournalPosted
-	if err := bus.Subscribe(bookkeeping.NewRouter().On(accounting.SubjectJournalPosted, captureJournal(&observed))); err != nil {
+	var meta accounting.EventMeta
+	handler := bookkeeping.EventHandlerFunc(func(c context.Context, evt bookkeeping.Event) error {
+		observed = append(observed, evt.(accounting.JournalPosted))
+		meta, _ = accounting.EventMetaFrom(c)
+		return nil
+	})
+	if err := bus.Subscribe(bookkeeping.NewRouter().On(accounting.SubjectJournalPosted, handler)); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 
-	// Entry.ID is producer-assigned; the bus stamps Subject+Sequence only.
 	in := sampleEvent()
-	in.Entry.ID = accounting.FormatEntryID(1)
+	in.Entry.ID = accounting.FormatEntryID(1) // Entry.ID is producer-assigned.
 
-	dispatched, err := bus.Publish(ctx, in, accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0})
-	if err != nil {
+	if err := bus.Publish(ctx, in, accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0}); err != nil {
 		t.Fatalf("publish: %v", err)
-	}
-	out, ok := dispatched.(accounting.JournalPosted)
-	if !ok {
-		t.Fatalf("expected JournalPosted, got %T", dispatched)
-	}
-
-	if out.Subject != accounting.SubjectJournalPosted {
-		t.Fatalf("expected Subject stamped, got %q", out.Subject)
-	}
-	if out.Sequence != 1 {
-		t.Fatalf("expected Sequence=1, got %d", out.Sequence)
-	}
-	if out.Entry.ID != in.Entry.ID {
-		t.Fatalf("expected Entry.ID preserved (%q), got %q", in.Entry.ID, out.Entry.ID)
 	}
 
 	if len(observed) != 1 {
@@ -70,17 +60,20 @@ func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
 	if observed[0].Entry.ID != in.Entry.ID {
 		t.Fatalf("handler saw different ID than producer set: %q vs %q", observed[0].Entry.ID, in.Entry.ID)
 	}
+	if meta.Subject != accounting.SubjectJournalPosted || meta.Sequence != 1 {
+		t.Fatalf("expected EventMeta {subject, seq=1} in ctx, got %+v", meta)
+	}
 }
 
 func TestBus_RejectsStaleExpectedSequence(t *testing.T) {
 	ctx := context.Background()
 	bus := inproc.NewAccountingBus()
 
-	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0}); err != nil {
+	if err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0}); err != nil {
 		t.Fatalf("first publish: %v", err)
 	}
 
-	_, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0})
+	err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: accounting.SubjectJournalPosted, LastSeq: 0})
 	if !errors.Is(err, accounting.ErrConcurrentUpdate) {
 		t.Fatalf("expected ErrConcurrentUpdate, got %v", err)
 	}
@@ -90,10 +83,10 @@ func TestBus_SkipsConcurrencyCheckWhenSubjectEmpty(t *testing.T) {
 	ctx := context.Background()
 	bus := inproc.NewAccountingBus()
 
-	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
+	if err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
 		t.Fatalf("first publish: %v", err)
 	}
-	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
+	if err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
 		t.Fatalf("second publish: %v", err)
 	}
 }
@@ -116,11 +109,11 @@ func TestBus_RouterDispatchesBySubject(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 
-	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
+	if err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
 		t.Fatal(err)
 	}
 	pc := accounting.PeriodClosure{Period: accounting.Period{ID: "2026-05", Status: accounting.PeriodClosed}}
-	if _, err := bus.Publish(ctx, pc, accounting.ExpectedSequence{}); err != nil {
+	if err := bus.Publish(ctx, pc, accounting.ExpectedSequence{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +139,7 @@ func TestBus_HandlerErrorPropagates(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 
-	_, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{})
+	err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{})
 	if !errors.Is(err, want) {
 		t.Fatalf("expected handler error to propagate, got %v", err)
 	}
