@@ -30,10 +30,10 @@ func (f EventHandlerFunc) Handle(ctx context.Context, evt Event) error {
 	return f(ctx, evt)
 }
 
-// Publisher publishes an Event through a transport, which assigns the
-// broker-side identifiers carried on the returned value.
+// Publisher publishes an Event through a transport. The broker assigns the
+// subject sequence; producers that need it predict it from ExpectedSequence.
 type Publisher interface {
-	Publish(ctx context.Context, evt Event, expect accounting.ExpectedSequence) (Event, error)
+	Publish(ctx context.Context, evt Event, expect accounting.ExpectedSequence) error
 }
 
 // Subscriber installs a Router as the sole subscription point for the bus.

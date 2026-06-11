@@ -28,10 +28,8 @@ func sampleEvent() accounting.JournalPosted {
 	}
 }
 
-func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
+func TestEncodeEvent_BodyIsJustThePayload(t *testing.T) {
 	evt := sampleEvent()
-	evt.Subject = "accounting.journal"
-	evt.Sequence = 42
 	evt.Entry.ID = "JE-0042"
 
 	body, err := encodeEvent(evt)
@@ -54,7 +52,7 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 	}
 }
 
-func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
+func TestDecodeBody_RoundTripsAndCarriesEntryID(t *testing.T) {
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(7)
 
@@ -62,16 +60,11 @@ func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := decodeJournalPosted(body, "accounting.journal", 7)
+	evt, err := decodeBody[accounting.JournalPosted](body)
 	if err != nil {
-		t.Fatalf("decodeJournalPosted: %v", err)
+		t.Fatalf("decodeBody: %v", err)
 	}
-	if got.Subject != "accounting.journal" {
-		t.Errorf("subject: got %q", got.Subject)
-	}
-	if got.Sequence != 7 {
-		t.Errorf("sequence: got %d", got.Sequence)
-	}
+	got := evt.(accounting.JournalPosted)
 	if got.Entry.ID != in.Entry.ID {
 		t.Errorf("entry id: want %q got %q", in.Entry.ID, got.Entry.ID)
 	}
@@ -80,28 +73,6 @@ func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
 	}
 	if len(got.Entry.Lines) != 2 {
 		t.Errorf("lines round-trip lost: %+v", got.Entry.Lines)
-	}
-}
-
-func TestStampPubAck_StampsSubjectSequenceWithoutTouchingEntryID(t *testing.T) {
-	in := sampleEvent()
-	in.Entry.ID = accounting.FormatEntryID(99)
-
-	// Re-encode and decode in.body to verify subject/sequence stamping
-	// without touching Entry.ID; this is the path the consume loop takes.
-	body, err := encodeJournalPosted(in)
-	if err != nil {
-		t.Fatalf("encodeJournalPosted: %v", err)
-	}
-	stamped, err := decodeJournalPosted(body, "accounting.journal", 99)
-	if err != nil {
-		t.Fatalf("decodeJournalPosted: %v", err)
-	}
-	if stamped.Subject != "accounting.journal" || stamped.Sequence != 99 {
-		t.Errorf("metadata not stamped: %+v", stamped)
-	}
-	if stamped.Entry.ID != in.Entry.ID {
-		t.Errorf("Entry.ID: want %q (producer-assigned) got %q", in.Entry.ID, stamped.Entry.ID)
 	}
 }
 
@@ -134,10 +105,11 @@ func TestEncodeDecode_RoundTripPreservesTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := decodeJournalPosted(body, "accounting.journal", 1)
+	decoded, err := decodeBody[accounting.JournalPosted](body)
 	if err != nil {
-		t.Fatalf("decodeJournalPosted: %v", err)
+		t.Fatalf("decodeBody: %v", err)
 	}
+	got := decoded.(accounting.JournalPosted)
 	if got.Entry.Lines[0].Dimensions.Tags["project"] != "atlas" {
 		t.Errorf("tag round-trip lost: %+v", got.Entry.Lines[0].Dimensions.Tags)
 	}

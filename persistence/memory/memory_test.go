@@ -9,10 +9,8 @@ import (
 	"github.com/flarexio/accounting/persistence/memory"
 )
 
-func sampleEntry(id string, seq uint64) accounting.JournalPosted {
+func sampleEntry(id string) accounting.JournalPosted {
 	return accounting.JournalPosted{
-		Subject:  "accounting.journal",
-		Sequence: seq,
 		Entry: accounting.JournalEntry{
 			ID:          id,
 			Date:        accounting.NewDate(2026, 5, 12),
@@ -28,16 +26,17 @@ func sampleEntry(id string, seq uint64) accounting.JournalPosted {
 	}
 }
 
-// apply projects evt the way a bus dispatch does: EventMeta in the context, then AppendEntry.
-func apply(ctx context.Context, repo *memory.Repository, evt accounting.JournalPosted) error {
-	ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: evt.Subject, Sequence: evt.Sequence})
+// apply projects evt the way a bus dispatch does: EventMeta (subject + seq) in
+// the context, then AppendEntry.
+func apply(ctx context.Context, repo *memory.Repository, seq uint64, evt accounting.JournalPosted) error {
+	ctx = accounting.WithEventMeta(ctx, accounting.EventMeta{Subject: accounting.SubjectJournalPosted, Sequence: seq})
 	return repo.AppendEntry(ctx, evt.Entry, evt.Relations)
 }
 
 func TestRepository_ApplyAndRead(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, 1, sampleEntry("JE-0001")); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	got, ok, err := repo.Entry(ctx, "JE-0001")
@@ -55,7 +54,7 @@ func TestRepository_ApplyAndRead(t *testing.T) {
 func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, 1, sampleEntry("JE-0001")); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 
@@ -79,8 +78,8 @@ func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T
 func TestRepository_AppliedEntryIsolatedFromEventLines(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()
-	evt := sampleEntry("JE-0001", 1)
-	if err := apply(ctx, repo, evt); err != nil {
+	evt := sampleEntry("JE-0001")
+	if err := apply(ctx, repo, 1, evt); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 
@@ -100,10 +99,10 @@ func TestRepository_LastSequenceTracksPerSubject(t *testing.T) {
 		t.Fatalf("expected zero LastSequence before any apply, got %d", got)
 	}
 
-	if err := apply(ctx, repo, sampleEntry("JE-0001", 1)); err != nil {
+	if err := apply(ctx, repo, 1, sampleEntry("JE-0001")); err != nil {
 		t.Fatal(err)
 	}
-	if err := apply(ctx, repo, sampleEntry("JE-0002", 2)); err != nil {
+	if err := apply(ctx, repo, 2, sampleEntry("JE-0002")); err != nil {
 		t.Fatal(err)
 	}
 

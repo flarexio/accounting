@@ -62,7 +62,11 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 	}
 	router := bookkeeping.NewRouter().
 		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo}).
-		On(accounting.SubjectPeriodClosure, &bookkeeping.ApplyPeriodClosure{Repo: repo})
+		On(accounting.SubjectPeriodClosure, &bookkeeping.ApplyPeriodClosure{Repo: repo}).
+		On(accounting.SubjectCompanyConfigured, &bookkeeping.ApplyCompany{Repo: repo}).
+		On(accounting.SubjectAccountAdded, &bookkeeping.ApplyAccount{Repo: repo}).
+		On(accounting.SubjectBranchAdded, &bookkeeping.ApplyBranch{Repo: repo}).
+		On(accounting.SubjectPeriodAdded, &bookkeeping.ApplyPeriod{Repo: repo})
 	if err := bus.Subscribe(router); err != nil {
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)

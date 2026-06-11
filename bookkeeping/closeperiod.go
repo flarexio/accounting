@@ -60,18 +60,13 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 
 	posted := make([]accounting.JournalEntry, 0, len(plans))
 	for _, plan := range plans {
-		dispatched, err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
+		if err := uc.Publisher.Publish(ctx, accounting.JournalPosted{
 			Entry:     plan.entry,
 			Relations: plan.relations,
-		}, plan.expect)
-		if err != nil {
+		}, plan.expect); err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publish: %w", err)
 		}
-		out, ok := dispatched.(accounting.JournalPosted)
-		if !ok {
-			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: publisher returned %T, want JournalPosted", dispatched)
-		}
-		posted = append(posted, out.Entry)
+		posted = append(posted, plan.entry)
 	}
 
 	if period.Status != accounting.PeriodClosed {
@@ -81,7 +76,7 @@ func (uc ClosePeriod) Execute(ctx context.Context, intent ClosePeriodIntent) (Cl
 		if err != nil {
 			return ClosePeriodResult{}, fmt.Errorf("bookkeeping: read period-closure sequence: %w", err)
 		}
-		if _, err := uc.Publisher.Publish(ctx, accounting.PeriodClosure{
+		if err := uc.Publisher.Publish(ctx, accounting.PeriodClosure{
 			Period: closedPeriod,
 		}, accounting.ExpectedSequence{
 			Subject: accounting.SubjectPeriodClosure,

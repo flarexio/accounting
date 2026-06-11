@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/accounting"
+	"github.com/flarexio/accounting/bookkeeping"
 )
 
 func newSeedCommand(stdout io.Writer) *cli.Command {
@@ -64,8 +65,15 @@ func runSeed(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer repoCloser.Close()
 
+	bus, err := buildMessaging(ctx, cfg.Messaging, repo)
+	if err != nil {
+		return err
+	}
+	defer bus.Close()
+
+	uc := bookkeeping.SeedScenario{Publisher: bus}
 	for _, s := range scenarios {
-		if err := s.Seed(ctx, repo); err != nil {
+		if err := uc.Execute(ctx, s); err != nil {
 			return fmt.Errorf("seed: %w", err)
 		}
 		fmt.Fprintf(stdout, "seeded %s (%s): %d account(s), %d branch(es), %d period(s)\n",
