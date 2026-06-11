@@ -67,6 +67,9 @@ SET start_on = EXCLUDED.start_on,
 -- name: UpdatePeriodStatus :execrows
 UPDATE periods SET status = $2 WHERE id = $1;
 
+-- name: CountEntries :one
+SELECT count(*) FROM journal_entries;
+
 -- name: GetEntry :one
 SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries

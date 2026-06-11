@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	CountEntries(ctx context.Context) (int64, error)
 	GetAccount(ctx context.Context, code string) (Account, error)
 	GetBranch(ctx context.Context, id string) (Branch, error)
 	GetEntry(ctx context.Context, id string) (JournalEntry, error)

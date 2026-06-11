@@ -115,9 +115,13 @@ func (uc ReverseJournal) prepare(ctx context.Context, intent ReverseIntent) (acc
 	if err != nil {
 		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", fmt.Errorf("bookkeeping: read last sequence: %w", err)
 	}
+	count, err := uc.Repo.EntryCount(ctx)
+	if err != nil {
+		return accounting.JournalEntry{}, accounting.JournalRelation{}, 0, "", fmt.Errorf("bookkeeping: read entry count: %w", err)
+	}
 
 	revEntry := accounting.JournalEntry{
-		ID:          accounting.FormatEntryID(lastSeq + 1),
+		ID:          accounting.FormatEntryID(count + 1),
 		Date:        revIntent.Date,
 		PeriodID:    revIntent.PeriodID,
 		Currency:    revIntent.Currency,

@@ -145,7 +145,7 @@ Currency precision is deliberately not validated: both `3150` and `315000` are l
 
 A posted `JournalEntry` is immutable. Corrections are represented as new journal entries, usually through `reverse_journal`, never by editing an existing posted entry in place. The new entry is linked back to the original through a `JournalRelation`, which is itself append-only — a wrong relation is corrected by appending another relation, not by editing the row.
 
-`PostJournal` derives the entry ID from the expected broker sequence, stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `AppendEntry` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
+`PostJournal` numbers the entry `JE-{EntryCount+1}` — a dense, transport-independent count of journal entries, separate from the per-subject stream sequence it passes as the optimistic-concurrency hint (the two diverge once the stream also carries non-journal events such as seeded reference data). It stamps `PostedAt` through its clock, publishes `JournalPosted`, and lets the projection apply the event. `ReverseJournal` builds the mirror entry and the relation as one bundle and drives the same publish path, so both land in one `AppendEntry` transaction. Repository reads return copies so callers cannot mutate stored state through returned values.
 
 ## Branches
 
