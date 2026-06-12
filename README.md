@@ -22,7 +22,7 @@ The runnable command is `ledger`, under `cmd/ledger`. It is a small operator CLI
 
 ![Reversal](docs/demos/reverse.gif)
 
-**Refusing an invalid request.** Posting into a closed period is rejected by the validator; the agent does not silently retarget it.
+**Refusing an invalid request.** Asking for a deactivated account is rejected by the validator; the agent does not silently substitute an active one.
 
 ![Rejection](docs/demos/reject.gif)
 

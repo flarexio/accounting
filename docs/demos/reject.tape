@@ -1,5 +1,5 @@
-# VHS tape: TUI rejection — the validator blocks a closed period; the agent
-# does not silently retarget it.
+# VHS tape: TUI rejection — the validator refuses a deactivated account; the
+# agent does not silently substitute an active one.
 # Record:  vhs docs/demos/reject.tape   →   docs/demos/reject.gif
 # Prereqs: pre-seed the ledger (slow, not recorded), `ledger` on PATH, an OpenAI
 # key in config.yaml.
@@ -19,8 +19,9 @@ Sleep 3s
 Enter
 Sleep 2s
 
-# 2026-03 is closed in the seed → expect a reject observation, not a posting.
-Type "幫我在 2026-03 記一筆 10,000 的現金收入。"
+# 6199 其他費用（舊制）is deactivated in the seed → expect a reject, not a
+# silent switch to an active account like 6117 雜費.
+Type "幫我用「其他費用（舊制）」這個科目記一筆 5,000 的雜支。"
 Sleep 1s
 Enter
 
