@@ -71,7 +71,7 @@ func balancedAWSIntent() accounting.JournalIntent {
 }
 
 func postIntent(intent accounting.JournalIntent) bookkeeping.Intent {
-	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
+	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent, Final: true}
 }
 
 func fixedClock() time.Time {
@@ -229,6 +229,7 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 			bookkeeping.Intent{
 				Kind:    bookkeeping.IntentReverseJournal,
 				Reverse: &bookkeeping.ReverseIntent{EntryID: postedID, Reason: "duplicate posting"},
+				Final:   true,
 			},
 			nil,
 			"reverse the entry the request names",
@@ -258,6 +259,50 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 	entries, _ := repo.Entries(ctx)
 	if len(entries) != 2 {
 		t.Fatalf("expected the original and the reversal stored, got %d", len(entries))
+	}
+}
+
+func TestAgent_MultiActionReverseThenRepostInOneRequest(t *testing.T) {
+	ctx := context.Background()
+	repo := awsBillRepo(t)
+	bus := wireBus(t, repo)
+
+	post := agent.Bookkeeper{
+		Engine: fakeEngineFunc(func(context.Context, llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+			return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, ""), nil
+		}),
+		Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3,
+	}
+	first, err := post.Book(ctx, "post the AWS bill")
+	if err != nil {
+		t.Fatalf("seed post: %v", err)
+	}
+
+	// One request, two actions: reverse the entry (not final), then re-post (final).
+	call := 0
+	engine := fakeEngineFunc(func(context.Context, llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		call++
+		if call == 1 {
+			return llm.IntentOutput(bookkeeping.Intent{
+				Kind:    bookkeeping.IntentReverseJournal,
+				Reverse: &bookkeeping.ReverseIntent{EntryID: first.Entry.ID, Reason: accounting.ReasonAmountError},
+				Final:   false,
+			}, nil, "reverse the wrong entry"), nil
+		}
+		return llm.IntentOutput(postIntent(balancedAWSIntent()), nil, "re-post the correction"), nil
+	})
+	bk := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 5}
+
+	res, err := bk.Book(ctx, "reverse JE and re-post at the right amount")
+	if err != nil {
+		t.Fatalf("multi-action request: %v", err)
+	}
+	if res.Turns != 2 {
+		t.Fatalf("turns = %d, want 2 (reverse + final post)", res.Turns)
+	}
+	entries, _ := repo.Entries(ctx)
+	if len(entries) != 3 {
+		t.Fatalf("expected original + reversal + correction = 3 entries, got %d", len(entries))
 	}
 }
 
