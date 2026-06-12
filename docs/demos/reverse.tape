@@ -26,7 +26,9 @@ Sleep 2s
 Type "JE-0001 金額打錯了，幫我沖掉。"
 Sleep 1s
 Enter
-Sleep 16s
+Sleep 18s
+# Hold on the reversal preview before the next request.
+Sleep 4s
 
 # Turn 2: re-post with the correct amount. "重新過一筆" is elliptical, so the
 # agent calls recent_entries to recover what JE-0001 was before posting the fix
@@ -34,8 +36,11 @@ Sleep 16s
 Type "再用正確的 94,500 含稅重新過一筆。"
 Sleep 1s
 Enter
-Sleep 20s
+Sleep 22s
 
-Sleep 2s
-Ctrl+C
+# Hold on the re-posted entry, then leave with esc (chat → select → shell).
+Sleep 4s
+Escape
+Sleep 1s
+Escape
 Sleep 1s
