@@ -21,6 +21,20 @@ func (h *ApplyCompany) Handle(ctx context.Context, evt Event) error {
 	return h.Repo.SetCompany(ctx, e.Company)
 }
 
+// ApplyPolicy projects accounting.PolicySet by storing the company's policy.
+type ApplyPolicy struct {
+	Repo accounting.LedgerRepository
+}
+
+// Handle implements bookkeeping.EventHandler.
+func (h *ApplyPolicy) Handle(ctx context.Context, evt Event) error {
+	e, ok := evt.(accounting.PolicySet)
+	if !ok {
+		return fmt.Errorf("bookkeeping: ApplyPolicy received %T on subject %q, want PolicySet", evt, evt.EventSubject())
+	}
+	return h.Repo.SetPolicy(ctx, e.Policy)
+}
+
 // ApplyAccount projects accounting.AccountAdded by upserting the chart account.
 type ApplyAccount struct {
 	Repo accounting.LedgerRepository

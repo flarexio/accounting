@@ -68,6 +68,8 @@ ledger book-run \
 
 ledger close --period 2026-05
 
+ledger policy set --file policy.md
+
 ledger tui
 ```
 
@@ -76,6 +78,8 @@ ledger tui
 `book-run` connects to the already-seeded ledger, runs one bookkeeping reasoning cycle against `--request`, and prints a JSON report. The reasoning engine is OpenAI-compatible; set `llm.model` and `llm.api_key` in `config.yaml` (or pass `--model`) and optionally `llm.base_url` for alternative providers.
 
 `close` closes an accounting period. For each branch with revenue or expense activity in the period it posts one balanced closing entry that drains every contributing account into the company's Retained Earnings account, links the closing entry back to each source entry through `JournalRelation` rows of type `closes`, then flips `Period.Status` to `closed`. Re-invoking against an already-closed period is a no-op. The use case refuses to close before `Period.End` has actually passed in `Company.TimeZone`, and refuses when no revenue or expense activity exists. The seed must set `company.retained_earnings_code` to the equity account the net income gets plugged into; see [`seed/taiwan_ledger.yaml`](seed/taiwan_ledger.yaml) for an example.
+
+`policy` reads or writes the company bookkeeping policy — operator-authored free-text (sparse bulleted markdown) the agent reads verbatim when choosing accounts, for high-consequence disambiguation rules (entertainment vs advertising expense, travel vs local transportation, repairs vs capitalized fixed asset). `policy set` reads the document from `--file` or stdin; `policy edit` round-trips it through `$EDITOR`; `policy get` prints it. It is event-sourced (`PolicySet`) and deliberately separate from `seed`: re-seeding never clobbers it, so bootstrap a starter policy with `ledger policy set` after `seed`. Distinct from an account's `description`/`aliases`, which are retrieval-only facts baked into the search embedding.
 
 `tui` opens the Bubble Tea terminal UI against the seeded ledger; same OpenAI requirement, no arguments.
 

@@ -26,6 +26,7 @@ var supportedSubjects = []string{
 	accounting.SubjectAccountAdded,
 	accounting.SubjectBranchAdded,
 	accounting.SubjectPeriodAdded,
+	accounting.SubjectPolicySet,
 }
 
 // accountingBus is the NATS JetStream backed bookkeeping.EventBus for the
@@ -145,7 +146,8 @@ func encodeEvent(evt bookkeeping.Event) ([]byte, error) {
 	switch evt.(type) {
 	case accounting.JournalPosted, accounting.PeriodClosure,
 		accounting.CompanyConfigured, accounting.AccountAdded,
-		accounting.BranchAdded, accounting.PeriodAdded:
+		accounting.BranchAdded, accounting.PeriodAdded,
+		accounting.PolicySet:
 		body, err := json.Marshal(evt)
 		if err != nil {
 			return nil, fmt.Errorf("nats: marshal %s: %w", evt.EventSubject(), err)
@@ -174,6 +176,8 @@ func decodeMsg(msg jetstream.Msg) (bookkeeping.Event, error) {
 		return decodeBody[accounting.BranchAdded](body)
 	case accounting.SubjectPeriodAdded:
 		return decodeBody[accounting.PeriodAdded](body)
+	case accounting.SubjectPolicySet:
+		return decodeBody[accounting.PolicySet](body)
 	default:
 		return nil, fmt.Errorf("nats: unknown subject %q", subject)
 	}

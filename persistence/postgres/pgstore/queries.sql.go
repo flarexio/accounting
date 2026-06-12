@@ -281,7 +281,7 @@ func (q *Queries) ListBranches(ctx context.Context) ([]Branch, error) {
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2
+SELECT id, name, timezone, retained_earnings_code, policy FROM companies LIMIT 2
 `
 
 // LIMIT 2 so the Go caller can defensively detect the >1 row invariant
@@ -300,6 +300,7 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.Name,
 			&i.Timezone,
 			&i.RetainedEarningsCode,
+			&i.Policy,
 		); err != nil {
 			return nil, err
 		}
@@ -549,6 +550,19 @@ func (q *Queries) ListRelationsTo(ctx context.Context, toEntry string) ([]Journa
 	return items, nil
 }
 
+const setPolicy = `-- name: SetPolicy :execrows
+UPDATE companies SET policy = $1
+`
+
+// Unqualified UPDATE targets the company singleton; :execrows == 0 means none exists.
+func (q *Queries) SetPolicy(ctx context.Context, policy string) (int64, error) {
+	result, err := q.db.Exec(ctx, setPolicy, policy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updatePeriodStatus = `-- name: UpdatePeriodStatus :execrows
 UPDATE periods SET status = $2 WHERE id = $1
 `
@@ -627,6 +641,7 @@ type UpsertCompanyParams struct {
 	RetainedEarningsCode string
 }
 
+// Omits policy on purpose: SetPolicy owns that column, so a re-seed can't clobber it.
 func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) error {
 	_, err := q.db.Exec(ctx, upsertCompany,
 		arg.ID,

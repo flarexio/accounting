@@ -80,7 +80,7 @@ Integration event
 
 | Concept | Type | Notes |
 | --- | --- | --- |
-| Company | `accounting.Company` | Legal entity that owns the ledger; carries an IANA `TimeZone` (e.g. `Asia/Taipei`) used to interpret business dates. |
+| Company | `accounting.Company` | Legal entity that owns the ledger; carries an IANA `TimeZone` (e.g. `Asia/Taipei`) used to interpret business dates and an operator-authored `Policy` document. |
 | Chart of accounts | `accounting.Account` | Active accounts can receive new postings. `Aliases` and `Description` are optional semantic-search hints. |
 | Accounting period | `accounting.Period` | Closed periods reject postings. `Start` and `End` are calendar dates (inclusive) in the company's timezone. |
 | Journal entry | `accounting.JournalEntry` | Posted immutable entry. `Date` is the business date (`accounting.Date`, `YYYY-MM-DD`); `PostedAt` is the UTC instant it was written. |
@@ -99,6 +99,16 @@ Account search is hybrid, not substring. The `find_accounts` tool sets `AccountF
 - **Lexical.** Exact code, exact name, name↔query substring, or code-in-query, ordered by match strength (`accounting.LexicalAccountTier`, mirrored in the Postgres SQL `CASE`). This catches the "I know it's 6104" or exact-name query the embedding might bury.
 
 The channels are combined by reciprocal rank fusion (`accounting.FuseAccountsRRF`, k=60): each account's score is the sum of `1/(k + rank)` across the channels that ranked it, so agreement between channels wins and a query that mentions neither a code nor a name simply falls back to the dense ranking. `Aliases` and `Description` are seed-time indexing inputs — the projection persists only the resulting embedding, so changing them requires re-seeding. Exact single-account lookup stays on `LedgerRepository.Account`.
+
+## Company Policy
+
+`Company.Policy` is operator-authored bookkeeping guidance the agent reads verbatim when choosing accounts. It is **judgment**, deliberately separate from the **facts** account search indexes: `Description`/`Aliases` describe what an account *is* (baked into the embedding), while policy states how *this company* resolves high-consequence ambiguities — entertainment vs advertising expense, travel vs local transportation, repairs vs capitalized fixed asset. The convention is a sparse bulleted markdown document, not a rule schema; `PromptRenderer.tenantContext` appends it under a labelled section so the model treats it as authoritative.
+
+Policy is event-sourced like the rest of the projection, but on its own path:
+
+- **Write.** `ledger policy set` (file/stdin) or `ledger policy edit` (`$EDITOR` round-trip) runs the `bookkeeping.SetPolicy` use case, which publishes `PolicySet` on `accounting.company.policy`; `get` reads the projection. It is operator-driven, never an agent `Intent`.
+- **Project.** `ApplyPolicy` maps `PolicySet` to `LedgerRepository.SetPolicy`, a targeted column write — the parallel of `SetPeriodStatus` for period state, not a full company upsert.
+- **Isolation from seed.** `PolicySet` is the *only* writer of the `policy` column: `UpsertCompany` omits it and `Company.Policy` is `yaml:"-"`, so `ledger seed` can neither set nor clobber it. Re-seeding a company (`CompanyConfigured` → `SetCompany`) leaves an existing policy intact.
 
 ## Invariants
 

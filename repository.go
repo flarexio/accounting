@@ -32,8 +32,13 @@ type LedgerRepository interface {
 	// FindAccounts searches the chart by filter; the strategy varies by adapter.
 	FindAccounts(ctx context.Context, filter AccountFilter) ([]Account, error)
 
-	// SetCompany stores the (single) company, overwriting any prior value.
+	// SetCompany stores the (single) company, overwriting any prior value. It
+	// never touches Policy, which has its own write path (SetPolicy).
 	SetCompany(ctx context.Context, c Company) error
+
+	// SetPolicy stores the company's policy, overwriting any prior value; an
+	// absent company is an error.
+	SetPolicy(ctx context.Context, policy string) error
 	PutAccount(ctx context.Context, a Account) error
 	// PutPeriod stores a period, overwriting any prior value.
 	PutPeriod(ctx context.Context, p Period) error

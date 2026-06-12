@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -238,7 +239,20 @@ func (r *Repository) Company(_ context.Context) (accounting.Company, bool, error
 func (r *Repository) SetCompany(_ context.Context, c accounting.Company) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.company != nil {
+		c.Policy = r.company.Policy // policy has its own write path; don't clobber on re-seed
+	}
 	r.company = &c
+	return nil
+}
+
+func (r *Repository) SetPolicy(_ context.Context, policy string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.company == nil {
+		return errors.New("memory: SetPolicy: no company configured")
+	}
+	r.company.Policy = policy
 	return nil
 }
 

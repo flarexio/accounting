@@ -117,6 +117,12 @@ func (r PromptRenderer) tenantContext() string {
 		fmt.Fprintf(&b, "\nOperator is working from branch %q (id: %s); default branch_id to this on new lines unless the user clearly specifies another.\n", name, r.OperatorBranchID)
 	}
 
+	if policy := strings.TrimSpace(r.Company.Policy); policy != "" {
+		b.WriteString("\nCompany bookkeeping policy (authoritative; apply when choosing accounts):\n")
+		b.WriteString(policy)
+		b.WriteString("\n")
+	}
+
 	b.WriteString("\nWhen choosing values for post_journal:\n")
 	if !toolMode {
 		b.WriteString("  - pick account_code only from the active chart of accounts above.\n")

@@ -23,7 +23,9 @@ CREATE TABLE companies (
     name                   TEXT NOT NULL,
     timezone               TEXT NOT NULL,
     -- Retained Earnings account code ClosePeriod plugs net income into; empty disables closing.
-    retained_earnings_code TEXT NOT NULL DEFAULT ''
+    retained_earnings_code TEXT NOT NULL DEFAULT '',
+    -- Operator-authored bookkeeping policy (markdown); written only by SetPolicy, never by seed.
+    policy                 TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE periods (
