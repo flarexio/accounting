@@ -20,7 +20,7 @@ Enter
 Sleep 2s
 
 # 2026-03 is closed in the seed → expect a reject observation, not a posting.
-Type "請在 2026-03 期間記錄 NT$10,000 現金收入。"
+Type "幫我在 2026-03 記一筆 10,000 的現金收入。"
 Sleep 1s
 Enter
 

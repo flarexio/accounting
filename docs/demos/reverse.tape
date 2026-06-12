@@ -2,7 +2,7 @@
 # Record:  vhs docs/demos/reverse.tape   →   docs/demos/reverse.gif
 # Prereqs (all pre-done, not recorded — they are slow): seed the ledger, then post
 # at least one entry so JE-0001 exists, e.g.
-#   ledger book-run --request '5/10 台北總公司現金銷售商品 NT$105,000，含 5% 銷項稅額 5,000。'
+#   ledger book-run --request '5/10 台北總公司現金賣了一批商品，收到 105,000 含稅。'
 # Adjust the JE id below if your first entry is not JE-0001. Needs `ledger` on PATH
 # and an OpenAI key in config.yaml.
 
@@ -21,7 +21,7 @@ Sleep 3s
 Enter
 Sleep 2s
 
-Type "請沖轉分錄 JE-0001，金額誤打為 NT$105,000，正確應為 NT$95,000，需先沖銷再重新過帳。"
+Type "JE-0001 那筆金額打錯了，應該是 95,000 不是 105,000，幫我沖掉重記。"
 Sleep 1s
 Enter
 

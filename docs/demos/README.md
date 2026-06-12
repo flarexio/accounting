@@ -25,7 +25,7 @@ the tapes — do it once before recording:
 ```bash
 ledger seed seed/taiwan_ledger.yaml
 # reverse.tape also needs one posted entry (JE-0001):
-ledger book-run --request '5/10 台北總公司現金銷售商品 NT$105,000，含 5% 銷項稅額 5,000。'
+ledger book-run --request '5/10 台北總公司現金賣了一批商品，收到 105,000 含稅。'
 ```
 
 ## Record
