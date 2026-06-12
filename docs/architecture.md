@@ -102,7 +102,7 @@ The channels are combined by reciprocal rank fusion (`accounting.FuseAccountsRRF
 
 ## Company Policy
 
-`Company.Policy` is operator-authored bookkeeping guidance the agent reads verbatim when choosing accounts. It is **judgment**, deliberately separate from the **facts** account search indexes: `Description`/`Aliases` describe what an account *is* (baked into the embedding), while policy states how *this company* resolves high-consequence ambiguities — 交際費 vs 廣告費, 旅費 vs 交通費, 修繕費 vs 固定資產. The convention is a sparse bulleted markdown document, not a rule schema; `PromptRenderer.tenantContext` appends it under a labelled section so the model treats it as authoritative.
+`Company.Policy` is operator-authored bookkeeping guidance the agent reads verbatim when choosing accounts. It is **judgment**, deliberately separate from the **facts** account search indexes: `Description`/`Aliases` describe what an account *is* (baked into the embedding), while policy states how *this company* resolves high-consequence ambiguities — entertainment vs advertising expense, travel vs local transportation, repairs vs capitalized fixed asset. The convention is a sparse bulleted markdown document, not a rule schema; `PromptRenderer.tenantContext` appends it under a labelled section so the model treats it as authoritative.
 
 Policy is event-sourced like the rest of the projection, but on its own path:
 
