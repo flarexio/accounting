@@ -29,6 +29,7 @@ func newApp(stdout, stderr io.Writer) *cli.Command {
 			newBenchCommand(stdout),
 			newCloseCommand(stdout),
 			newSeedCommand(stdout),
+			newPolicyCommand(stdout),
 			newTUICommand(),
 		},
 	}

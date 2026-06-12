@@ -68,7 +68,20 @@ func companyFromRow(row pgstore.Company) accounting.Company {
 		Name:                 row.Name,
 		TimeZone:             row.Timezone,
 		RetainedEarningsCode: row.RetainedEarningsCode,
+		Policy:               row.Policy,
 	}
+}
+
+// SetPolicy stores the company's policy document; an absent company is an error.
+func (r *accountingRepository) SetPolicy(ctx context.Context, policy string) error {
+	rows, err := r.q.SetPolicy(ctx, policy)
+	if err != nil {
+		return fmt.Errorf("postgres: SetPolicy: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("postgres: SetPolicy: no company configured")
+	}
+	return nil
 }
 
 func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {

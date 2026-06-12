@@ -38,11 +38,14 @@ const (
 
 // Company is the legal entity that owns the ledger. RetainedEarningsCode names
 // the equity account ClosePeriod plugs net income into; empty disables closing.
+// Policy is operator-authored bookkeeping guidance with its own write path
+// (SetPolicy), so seed (yaml:"-") never sets or clobbers it.
 type Company struct {
 	ID                   string `json:"id" yaml:"id"`
 	Name                 string `json:"name" yaml:"name"`
 	TimeZone             string `json:"timezone" yaml:"timezone"`
 	RetainedEarningsCode string `json:"retained_earnings_code,omitempty" yaml:"retained_earnings_code,omitempty"`
+	Policy               string `json:"policy,omitempty" yaml:"-"`
 }
 
 // Location parses the IANA name in TimeZone; returns time.UTC if empty or invalid.
