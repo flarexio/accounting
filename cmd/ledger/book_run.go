@@ -18,13 +18,16 @@ import (
 )
 
 type bookRunOutput struct {
-	Request     string                  `json:"request"`
-	Turns       int                     `json:"turns"`
-	Intent      bookkeeping.Intent      `json:"intent"`
-	Entry       accounting.JournalEntry `json:"entry"`
-	Observation llm.Observation         `json:"observation"`
-	Events      []llm.CycleEvent        `json:"events"`
-	Feedback    []string                `json:"feedback"`
+	Request string             `json:"request"`
+	Turns   int                `json:"turns"`
+	Intent  bookkeeping.Intent `json:"intent"`
+	// Entries lists every entry the request committed (one per action); Entry is
+	// the last of them, kept for single-action convenience.
+	Entries     []accounting.JournalEntry `json:"entries"`
+	Entry       accounting.JournalEntry   `json:"entry"`
+	Observation llm.Observation           `json:"observation"`
+	Events      []llm.CycleEvent          `json:"events"`
+	Feedback    []string                  `json:"feedback"`
 }
 
 func newBookRunCommand(stdout io.Writer) *cli.Command {
@@ -120,6 +123,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Request:     request,
 		Turns:       res.Turns,
 		Intent:      res.Intent,
+		Entries:     res.Entries,
 		Entry:       res.Entry,
 		Observation: res.Observation,
 		Events:      res.Events,
