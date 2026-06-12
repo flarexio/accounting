@@ -28,5 +28,5 @@ Enter
 # Reversal turn: mirror entry + JournalRelation (reverses · amount_error).
 Sleep 16s
 Sleep 2s
-Type "q"
+Ctrl+C
 Sleep 1s

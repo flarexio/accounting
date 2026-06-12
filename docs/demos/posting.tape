@@ -30,5 +30,5 @@ Sleep 14s
 
 # Linger on the posted entry, then leave.
 Sleep 2s
-Type "q"
+Ctrl+C
 Sleep 1s

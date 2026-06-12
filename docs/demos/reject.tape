@@ -26,5 +26,5 @@ Enter
 
 Sleep 14s
 Sleep 2s
-Type "q"
+Ctrl+C
 Sleep 1s
