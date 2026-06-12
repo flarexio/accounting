@@ -104,6 +104,20 @@ func TestPromptRenderer_OmitsPolicySectionWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestPromptRenderer_TeachesFinalAction(t *testing.T) {
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+	msgs, _ := renderer.Render(llm.ReasoningInput{Task: "x"})
+	for _, want := range []string{"Completing a request", `"final": true`} {
+		if !strings.Contains(msgs[0].Content, want) {
+			t.Errorf("system prompt missing %q (multi-action completion rule)", want)
+		}
+	}
+}
+
 func TestPromptRenderer_RecallRulesGatedByFlag(t *testing.T) {
 	_, repo := awsBillScenario(t)
 	renderer, err := agent.NewPromptRenderer(context.Background(), repo)

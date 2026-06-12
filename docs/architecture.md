@@ -194,6 +194,14 @@ The shared Stoa contracts provide the agent harness vocabulary:
 
 The prompt can explain accounting judgment, but every accounting invariant must also be enforced by Go validators.
 
+## Multi-action requests
+
+One request can perform several actions — the canonical case is "reverse that entry and re-post it at the right amount", a `reverse_journal` followed by a `post_journal`. The harness loop runs intents until the model marks one `final: true`; that final action is executed and then the loop stops (stoa's `FinalIntent`/`IsFinal`). A lone post is itself final, so the common single-action request is still one turn.
+
+Every entry point is multi-action because `bookkeeping.Intent` implements `IsFinal` — TUI, `book-run`, and `bench` alike. Two bounds guard a runaway loop: `MaxTurns` (default 8) caps total turns including tool calls, and `maxPostsPerRequest` caps how many entries one request may post regardless of the turn budget.
+
+A multi-action request is **not yet atomic**: each action publishes as it executes, so a request that fails after its first action leaves that action committed. `bookkeeping.Staging` (buffer events, commit-all or abort) is the mechanism for making the batch all-or-nothing; wiring it into the agent is tracked separately.
+
 ## Recent-context recall
 
 Each `Bookkeeper.Book` call is stateless — it sees only the current request, not the prior turns. A multi-turn TUI session would otherwise lose the thread of a follow-up like "redo that entry with the correct amount". Rather than replay the conversation into the prompt (which grows unbounded and invites the model to guess), recall is **retrieval-based and agent-driven**:

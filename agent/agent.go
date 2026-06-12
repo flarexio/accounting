@@ -14,6 +14,12 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
+// maxPostsPerRequest caps how many entries one request may post, bounding a
+// runaway multi-action loop independently of MaxTurns (which also counts tool
+// calls). Reached, the executor refuses further postings until the model
+// finishes or rejects.
+const maxPostsPerRequest = 12
+
 // Bookkeeper runs one bookkeeping decision: reason -> validate -> execute.
 type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[bookkeeping.Intent]
@@ -53,6 +59,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	registry := bookkeeping.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
 
 	var posted accounting.JournalEntry
+	posts := 0
 	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
 		if intent.Kind == bookkeeping.IntentReject {
 			reason := "request cannot be fulfilled"
@@ -61,10 +68,14 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 			}
 			return llm.Observation{Summary: reason}, nil
 		}
+		if posts >= maxPostsPerRequest {
+			return llm.Observation{}, fmt.Errorf("bookkeeping: request already posted %d entries; finish it (mark a final action or reject)", maxPostsPerRequest)
+		}
 		entry, err := registry.Execute(ctx, intent)
 		if err != nil {
 			return llm.Observation{}, err
 		}
+		posts++
 		posted = entry
 		a.Recent.Add(entry)
 		return llm.Observation{

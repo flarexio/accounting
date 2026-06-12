@@ -31,6 +31,7 @@ func goldIntent() bookkeeping.Intent {
 				{AccountCode: "2100", Side: accounting.SideCredit, Amount: 120000, Dimensions: accounting.Dimensions{BranchID: "hq"}},
 			},
 		},
+		Final: true,
 	}
 }
 
