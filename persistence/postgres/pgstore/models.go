@@ -26,6 +26,7 @@ type Company struct {
 	Name                 string
 	Timezone             string
 	RetainedEarningsCode string
+	Policy               string
 }
 
 type JournalEntry struct {

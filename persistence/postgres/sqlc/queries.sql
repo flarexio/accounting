@@ -1,15 +1,22 @@
 -- name: ListCompanies :many
 -- LIMIT 2 so the Go caller can defensively detect the >1 row invariant
 -- violation that the domain singleton rule forbids.
-SELECT id, name, timezone, retained_earnings_code FROM companies LIMIT 2;
+SELECT id, name, timezone, retained_earnings_code, policy FROM companies LIMIT 2;
 
 -- name: UpsertCompany :exec
+-- Policy is intentionally omitted: it is written only by SetPolicy, so a
+-- re-seed (CompanyConfigured -> SetCompany) leaves an operator's policy intact.
 INSERT INTO companies (id, name, timezone, retained_earnings_code)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     timezone = EXCLUDED.timezone,
     retained_earnings_code = EXCLUDED.retained_earnings_code;
+
+-- name: SetPolicy :execrows
+-- Single-company singleton, so the unqualified UPDATE targets the one row;
+-- :execrows lets the caller detect "no company configured" (zero rows).
+UPDATE companies SET policy = $1;
 
 -- name: GetAccount :one
 SELECT code, name, type, active

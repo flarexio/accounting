@@ -70,6 +70,40 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 	}
 }
 
+func TestPromptRenderer_IncludesCompanyPolicy(t *testing.T) {
+	_, repo := awsBillScenario(t)
+	const policy = "- 修繕費 vs 固定資產: 延長耐用年限的支出資本化。"
+	if err := repo.SetPolicy(context.Background(), policy); err != nil {
+		t.Fatalf("set policy: %v", err)
+	}
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+	messages, err := renderer.Render(llm.ReasoningInput{Task: "anything"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(messages[0].Content, policy) {
+		t.Errorf("system prompt missing company policy\n--- prompt ---\n%s", messages[0].Content)
+	}
+}
+
+func TestPromptRenderer_OmitsPolicySectionWhenEmpty(t *testing.T) {
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+	messages, err := renderer.Render(llm.ReasoningInput{Task: "anything"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.Contains(messages[0].Content, "bookkeeping policy") {
+		t.Errorf("empty policy should not emit a policy section\n--- prompt ---\n%s", messages[0].Content)
+	}
+}
+
 func TestPromptRenderer_IncludesNowFromClock(t *testing.T) {
 	_, repo := awsBillScenario(t)
 	renderer, err := agent.NewPromptRenderer(context.Background(), repo)

@@ -20,6 +20,9 @@ const (
 	SubjectPeriodAdded       = "accounting.period.added"
 )
 
+// SubjectPolicySet is the bus subject PolicySet events are published on.
+const SubjectPolicySet = "accounting.company.policy"
+
 // JournalPosted is the domain event emitted after a JournalIntent has been
 // validated and the broker has accepted it. Entry.ID is producer-assigned and
 // carried through the body. Relations carries any JournalRelation rows built
@@ -66,6 +69,17 @@ type PeriodAdded struct {
 
 // EventSubject reports the bus subject PeriodAdded lives on.
 func (PeriodAdded) EventSubject() string { return SubjectPeriodAdded }
+
+// PolicySet carries the company's bookkeeping policy document for the
+// projection to store, overwriting any prior value. The body is operator-authored
+// free-text (markdown convention), injected verbatim into the agent prompt; the
+// empty string clears the policy.
+type PolicySet struct {
+	Policy string `json:"policy"`
+}
+
+// EventSubject reports the bus subject PolicySet lives on.
+func (PolicySet) EventSubject() string { return SubjectPolicySet }
 
 // PeriodClosure is the domain event emitted by ClosePeriod after every
 // closing entry for the period has been published. The subscribed handler is

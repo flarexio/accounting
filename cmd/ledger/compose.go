@@ -64,6 +64,7 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 		On(accounting.SubjectJournalPosted, &bookkeeping.ApplyJournal{Repo: repo}).
 		On(accounting.SubjectPeriodClosure, &bookkeeping.ApplyPeriodClosure{Repo: repo}).
 		On(accounting.SubjectCompanyConfigured, &bookkeeping.ApplyCompany{Repo: repo}).
+		On(accounting.SubjectPolicySet, &bookkeeping.ApplyPolicy{Repo: repo}).
 		On(accounting.SubjectAccountAdded, &bookkeeping.ApplyAccount{Repo: repo}).
 		On(accounting.SubjectBranchAdded, &bookkeeping.ApplyBranch{Repo: repo}).
 		On(accounting.SubjectPeriodAdded, &bookkeeping.ApplyPeriod{Repo: repo})
