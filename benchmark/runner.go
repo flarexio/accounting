@@ -205,7 +205,9 @@ func (r *Runner) runIteration(ctx context.Context, c *Case, m ModelConfig, itera
 	}
 	res, runErr := a.Book(ctx, c.Request)
 	rr.Intent = res.Intent
-	rr.Entry = res.Entry
+	if n := len(res.Entries); n > 0 {
+		rr.Entry = res.Entries[n-1]
+	}
 	rr.Observation = res.Observation
 	rr.Score = Compare(res, c.Gold)
 	if runErr != nil {

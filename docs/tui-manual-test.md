@@ -187,6 +187,16 @@ JE-XXXX 金額打錯了，幫我沖掉。
 
 > `reverse_journal` 只做機械式鏡像；「重記」是另一筆 `post_journal`，靠 recent-context recall 把 turn 1 的脈絡接起來。agent **絕不自行編造金額**，缺資訊則 `reject`。客戶退貨另走 `post_journal` 搭配 4111 銷貨退回及折讓，由使用者明確指定。
 
+**Turn 1+2 合成一句 — multi-action 原子提交**：上面拆兩 turn 的事，也可以一個 request 一次說完。agent 在同一迴圈跑沖銷＋重記兩個 action，最後**一次** all-or-nothing 提交：
+
+```
+JE-XXXX 金額打錯了，幫我沖掉，再用正確的含稅 94,500 重新過一筆。
+```
+
+預期分錄同上（沖銷 + 1101 借 94,500 的新分錄），差別在系統行**一次**列兩筆：`posted 2 entries: JE-A, JE-B`，且中間沒有「只沖銷、未重記」的中途狀態。
+
+**原子中止**：用過低的 turn 上限逼出 `MaxTurns`（`ledger tui --max-turns 1`），下同樣的多動作 request。第一個 turn 發出非 final 的沖銷後就撞上限：不出現 `posted ...`、顯示 `max turns exceeded`，且 ledger **完全沒變**（沒留下半筆沖銷）。用 `book-run` 對照最直接——正常時 `entries` 兩筆、中止時 `entries` 為空且回非零結束碼。
+
 ---
 
 ## 4. 拒絕情境
@@ -237,6 +247,7 @@ JE-XXXX 金額打錯了，幫我沖掉。
 - [ ] T-05 薪資複雜金額貸方合計正確（1,234,567）
 - [ ] T-09 turn 1 沖轉分錄借貸互換、金額相同，`JournalRelation.reason` 為具體分類（非 `other`）、`note` 具體
 - [ ] T-09 turn 2 出現 `recent_entries` 工具呼叫，重記分錄借方 1101 為 94,500（稅拆 90,000 + 4,500）
+- [ ] T-09 合成單一 request 時一次過帳兩筆（`posted 2 entries: ...`），`--max-turns 1` 中止後 ledger 無任何變動
 - [ ] T-10 指定關帳期間時出現 `reject`，不過帳、不替換期間
 - [ ] T-12 停用科目出現 `reject`，LLM 不自行選替代科目
 - [ ] 所有 TWD 金額以整數輸入，無小數點

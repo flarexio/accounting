@@ -60,7 +60,7 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("engine called %d times, want 2 (one tool round, one post)", calls)
 	}
-	if res.Entry.ID == "" {
+	if len(res.Entries) == 0 {
 		t.Error("expected an entry to be posted after the tool round")
 	}
 	var sawToolEvent bool

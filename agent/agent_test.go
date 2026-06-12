@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/messaging/inproc"
 	"github.com/flarexio/accounting/persistence/memory"
+	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -107,17 +109,17 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 	if res.Intent.Kind != bookkeeping.IntentPostJournal {
 		t.Fatalf("expected a post_journal intent, got %q", res.Intent.Kind)
 	}
-	if res.Entry.ID == "" {
-		t.Fatal("expected posted entry to be returned")
+	if len(res.Entries) != 1 {
+		t.Fatalf("expected one posted entry to be returned, got %d", len(res.Entries))
 	}
-	if !strings.HasPrefix(res.Entry.ID, "JE-") {
-		t.Fatalf("unexpected entry id format: %q", res.Entry.ID)
+	if !strings.HasPrefix(res.Entries[0].ID, "JE-") {
+		t.Fatalf("unexpected entry id format: %q", res.Entries[0].ID)
 	}
 	got, err := repo.Entries(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ID != res.Entry.ID {
+	if len(got) != 1 || got[0].ID != res.Entries[0].ID {
 		t.Fatalf("expected one stored entry matching returned ID, got %+v", got)
 	}
 }
@@ -188,8 +190,8 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success after correcting to open period, got %v", err)
 	}
-	if res.Entry.PeriodID != "2026-05" {
-		t.Fatalf("expected entry posted to open period, got %q", res.Entry.PeriodID)
+	if res.Entries[0].PeriodID != "2026-05" {
+		t.Fatalf("expected entry posted to open period, got %q", res.Entries[0].PeriodID)
 	}
 }
 
@@ -210,8 +212,8 @@ func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Entry.ID == b.Entry.ID {
-		t.Fatalf("expected distinct IDs across posts, got %s and %s", a.Entry.ID, b.Entry.ID)
+	if a.Entries[0].ID == b.Entries[0].ID {
+		t.Fatalf("expected distinct IDs across posts, got %s and %s", a.Entries[0].ID, b.Entries[0].ID)
 	}
 }
 
@@ -241,7 +243,7 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
-	postedID = first.Entry.ID
+	postedID = first.Entries[0].ID
 
 	second, err := agent.Book(ctx, "Reverse "+postedID+"; it was a duplicate")
 	if err != nil {
@@ -250,11 +252,11 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 	if second.Intent.Kind != bookkeeping.IntentReverseJournal {
 		t.Fatalf("expected the reverse_journal intent, got %q", second.Intent.Kind)
 	}
-	if second.Entry.ID == first.Entry.ID {
+	if second.Entries[0].ID == first.Entries[0].ID {
 		t.Fatal("expected the reversal to be posted as a new entry")
 	}
-	if !strings.HasPrefix(second.Entry.Description, "Reversal of "+first.Entry.ID) {
-		t.Fatalf("expected the reversal description to name the original, got %q", second.Entry.Description)
+	if !strings.HasPrefix(second.Entries[0].Description, "Reversal of "+first.Entries[0].ID) {
+		t.Fatalf("expected the reversal description to name the original, got %q", second.Entries[0].Description)
 	}
 	entries, _ := repo.Entries(ctx)
 	if len(entries) != 2 {
@@ -285,7 +287,7 @@ func TestAgent_MultiActionReverseThenRepostInOneRequest(t *testing.T) {
 		if call == 1 {
 			return llm.IntentOutput(bookkeeping.Intent{
 				Kind:    bookkeeping.IntentReverseJournal,
-				Reverse: &bookkeeping.ReverseIntent{EntryID: first.Entry.ID, Reason: accounting.ReasonAmountError},
+				Reverse: &bookkeeping.ReverseIntent{EntryID: first.Entries[0].ID, Reason: accounting.ReasonAmountError},
 				Final:   false,
 			}, nil, "reverse the wrong entry"), nil
 		}
@@ -300,9 +302,41 @@ func TestAgent_MultiActionReverseThenRepostInOneRequest(t *testing.T) {
 	if res.Turns != 2 {
 		t.Fatalf("turns = %d, want 2 (reverse + final post)", res.Turns)
 	}
+	if len(res.Entries) != 2 {
+		t.Fatalf("res.Entries = %d, want 2 (reversal + correction)", len(res.Entries))
+	}
 	entries, _ := repo.Entries(ctx)
 	if len(entries) != 3 {
 		t.Fatalf("expected original + reversal + correction = 3 entries, got %d", len(entries))
+	}
+}
+
+// A multi-action request that never marks a final action runs to MaxTurns and
+// aborts: the staged entries are discarded, so the ledger keeps only what earlier
+// requests committed and the Result reports nothing committed.
+func TestAgent_PartialMultiActionAbortsWithoutCommitting(t *testing.T) {
+	ctx := context.Background()
+	repo := awsBillRepo(t)
+	bus := wireBus(t, repo)
+
+	// Every turn posts a non-final entry, so the loop never finishes and exhausts MaxTurns.
+	engine := fakeEngineFunc(func(context.Context, llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		intent := postIntent(balancedAWSIntent())
+		intent.Final = false
+		return llm.IntentOutput(intent, nil, "keep posting, never final"), nil
+	})
+	bk := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+
+	res, err := bk.Book(ctx, "do several things but never finish")
+	if !errors.Is(err, loop.ErrMaxTurnsExceeded) {
+		t.Fatalf("err = %v, want ErrMaxTurnsExceeded", err)
+	}
+	if len(res.Entries) != 0 {
+		t.Fatalf("aborted request should commit nothing, got %d entries", len(res.Entries))
+	}
+	entries, _ := repo.Entries(ctx)
+	if len(entries) != 0 {
+		t.Fatalf("expected the ledger untouched after abort, got %d entries", len(entries))
 	}
 }
 

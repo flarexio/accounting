@@ -56,15 +56,16 @@ func TestAgent_OpenAI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bookkeeping run failed: %v", err)
 	}
-	if res.Entry.ID == "" {
-		t.Fatal("expected a posted entry")
+	if len(res.Entries) != 1 {
+		t.Fatalf("expected one posted entry, got %d", len(res.Entries))
 	}
-	if res.Entry.PeriodID != "2026-05" {
-		t.Errorf("expected entry posted to open May 2026 period, got %q", res.Entry.PeriodID)
+	entry := res.Entries[0]
+	if entry.PeriodID != "2026-05" {
+		t.Errorf("expected entry posted to open May 2026 period, got %q", entry.PeriodID)
 	}
 
 	var debit, credit int64
-	for _, line := range res.Entry.Lines {
+	for _, line := range entry.Lines {
 		switch line.Side {
 		case accounting.SideDebit:
 			debit += line.Amount
@@ -76,8 +77,8 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Errorf("posted entry should be balanced, got debit=%d credit=%d", debit, credit)
 	}
 
-	t.Logf("turns=%d entry=%s currency=%s debit=%d credit=%d", res.Turns, res.Entry.ID, res.Entry.Currency, debit, credit)
-	for _, line := range res.Entry.Lines {
+	t.Logf("turns=%d entry=%s currency=%s debit=%d credit=%d", res.Turns, entry.ID, entry.Currency, debit, credit)
+	for _, line := range entry.Lines {
 		t.Logf("  %s %s %d (%s) memo=%q", line.AccountCode, line.Side, line.Amount, line.Dimensions.BranchID, line.Memo)
 	}
 }
