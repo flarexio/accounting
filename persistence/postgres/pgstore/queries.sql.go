@@ -554,8 +554,7 @@ const setPolicy = `-- name: SetPolicy :execrows
 UPDATE companies SET policy = $1
 `
 
-// Single-company singleton, so the unqualified UPDATE targets the one row;
-// :execrows lets the caller detect "no company configured" (zero rows).
+// Unqualified UPDATE targets the company singleton; :execrows == 0 means none exists.
 func (q *Queries) SetPolicy(ctx context.Context, policy string) (int64, error) {
 	result, err := q.db.Exec(ctx, setPolicy, policy)
 	if err != nil {
@@ -642,8 +641,7 @@ type UpsertCompanyParams struct {
 	RetainedEarningsCode string
 }
 
-// Policy is intentionally omitted: it is written only by SetPolicy, so a
-// re-seed (CompanyConfigured -> SetCompany) leaves an operator's policy intact.
+// Omits policy on purpose: SetPolicy owns that column, so a re-seed can't clobber it.
 func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) error {
 	_, err := q.db.Exec(ctx, upsertCompany,
 		arg.ID,

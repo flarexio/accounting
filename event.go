@@ -70,10 +70,8 @@ type PeriodAdded struct {
 // EventSubject reports the bus subject PeriodAdded lives on.
 func (PeriodAdded) EventSubject() string { return SubjectPeriodAdded }
 
-// PolicySet carries the company's bookkeeping policy document for the
-// projection to store, overwriting any prior value. The body is operator-authored
-// free-text (markdown convention), injected verbatim into the agent prompt; the
-// empty string clears the policy.
+// PolicySet carries the company's bookkeeping policy for the projection to
+// store; the empty string clears it.
 type PolicySet struct {
 	Policy string `json:"policy"`
 }

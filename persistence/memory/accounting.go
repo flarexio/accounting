@@ -240,13 +240,12 @@ func (r *Repository) SetCompany(_ context.Context, c accounting.Company) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.company != nil {
-		c.Policy = r.company.Policy // policy has its own write path; never clobber on re-seed
+		c.Policy = r.company.Policy // policy has its own write path; don't clobber on re-seed
 	}
 	r.company = &c
 	return nil
 }
 
-// SetPolicy stores the company's policy document; an absent company is an error.
 func (r *Repository) SetPolicy(_ context.Context, policy string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

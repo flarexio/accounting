@@ -135,7 +135,6 @@ func runPolicyEdit(ctx context.Context, c *cli.Command, stdout io.Writer) error 
 	return runSetPolicy(ctx, bus, stdout, edited)
 }
 
-// publishPolicy builds the repo and bus and applies policy through SetPolicy.
 func publishPolicy(ctx context.Context, c *cli.Command, stdout io.Writer, policy string) error {
 	cfg, err := loadBookConfig(c.String("work-dir"))
 	if err != nil {
@@ -155,7 +154,6 @@ func publishPolicy(ctx context.Context, c *cli.Command, stdout io.Writer, policy
 	return runSetPolicy(ctx, bus, stdout, policy)
 }
 
-// runSetPolicy publishes the policy and waits for the projection to reflect it.
 func runSetPolicy(ctx context.Context, bus bookkeeping.EventBus, stdout io.Writer, policy string) error {
 	uc := bookkeeping.SetPolicy{Publisher: bus}
 	if err := uc.Execute(ctx, policy); err != nil {
@@ -172,8 +170,7 @@ func runSetPolicy(ctx context.Context, bus bookkeeping.EventBus, stdout io.Write
 	return nil
 }
 
-// editInEditor round-trips initial through $EDITOR (then $VISUAL, then vi) in a
-// temp file and returns the saved contents.
+// editInEditor round-trips initial through $EDITOR (then $VISUAL, then vi).
 func editInEditor(initial string) (string, error) {
 	tmp, err := os.CreateTemp("", "ledger-policy-*.md")
 	if err != nil {

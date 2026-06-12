@@ -38,9 +38,8 @@ const (
 
 // Company is the legal entity that owns the ledger. RetainedEarningsCode names
 // the equity account ClosePeriod plugs net income into; empty disables closing.
-// Policy is operator-authored bookkeeping guidance set via `ledger policy`, not
-// seed (yaml:"-"); it has its own write path (SetPolicy) and is never touched by
-// SetCompany.
+// Policy is operator-authored bookkeeping guidance with its own write path
+// (SetPolicy), so seed (yaml:"-") never sets or clobbers it.
 type Company struct {
 	ID                   string `json:"id" yaml:"id"`
 	Name                 string `json:"name" yaml:"name"`
