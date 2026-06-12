@@ -51,6 +51,111 @@ func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
 	}
 }
 
+const (
+	toolRecentEntries = "recent_entries"
+	toolGetEntry      = "get_entry"
+)
+
+const recentEntriesArgsSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["limit"],
+  "properties": {
+    "limit": { "type": "integer", "description": "How many of the most recent entries to return; 0 means all that are remembered." }
+  }
+}`
+
+const getEntryArgsSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["entry_id"],
+  "properties": {
+    "entry_id": { "type": "string", "description": "The entry id to fetch, e.g. JE-0001." }
+  }
+}`
+
+type recentEntriesArgs struct {
+	Limit int `json:"limit"`
+}
+
+type getEntryArgs struct {
+	EntryID string `json:"entry_id"`
+}
+
+// recallTools lets a later turn recover what an earlier turn did without the
+// transcript: recent_entries lists this session's recent postings, get_entry
+// fetches one by id from the ledger. They are only wired when the bookkeeper
+// carries a RecentEntries.
+func recallTools(repo accounting.LedgerRepository, recent *RecentEntries) map[string]loop.Tool {
+	return map[string]loop.Tool{
+		toolRecentEntries: {
+			Spec: llm.ToolSpec{
+				Name:        toolRecentEntries,
+				Description: "List the journal entries you have posted earlier in this session, most recent first, with their lines. Use it to resolve a request that refers to prior work (\"that entry\", \"redo it\", \"change it to ...\") instead of guessing.",
+				ArgsSchema:  json.RawMessage(recentEntriesArgsSchema),
+			},
+			Handler: recentEntriesHandler(recent),
+		},
+		toolGetEntry: {
+			Spec: llm.ToolSpec{
+				Name:        toolGetEntry,
+				Description: "Fetch one posted journal entry by id (e.g. JE-0001), with its lines, from the ledger.",
+				ArgsSchema:  json.RawMessage(getEntryArgsSchema),
+			},
+			Handler: getEntryHandler(repo),
+		},
+	}
+}
+
+func recentEntriesHandler(recent *RecentEntries) loop.ToolHandler {
+	return func(_ context.Context, args json.RawMessage) (string, error) {
+		var p recentEntriesArgs
+		if len(args) > 0 {
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("invalid recent_entries args: %w", err)
+			}
+		}
+		entries := recent.Recent(p.Limit)
+		if len(entries) == 0 {
+			return "No entries posted yet in this session.", nil
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "%d recent entry(ies) this session, most recent first:", len(entries))
+		for _, e := range entries {
+			b.WriteString("\n")
+			b.WriteString(formatEntry(e))
+		}
+		return b.String(), nil
+	}
+}
+
+func getEntryHandler(repo accounting.LedgerRepository) loop.ToolHandler {
+	return func(ctx context.Context, args json.RawMessage) (string, error) {
+		var p getEntryArgs
+		if err := json.Unmarshal(args, &p); err != nil {
+			return "", fmt.Errorf("invalid get_entry args: %w", err)
+		}
+		entry, found, err := repo.Entry(ctx, strings.TrimSpace(p.EntryID))
+		if err != nil {
+			return "", err
+		}
+		if !found {
+			return fmt.Sprintf("No entry %q exists.", p.EntryID), nil
+		}
+		return formatEntry(entry), nil
+	}
+}
+
+// formatEntry renders one entry compactly: header line plus one line per posting line.
+func formatEntry(e accounting.JournalEntry) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s · %s · %s · %s", e.ID, e.Date, e.PeriodID, e.Description)
+	for _, l := range e.Lines {
+		fmt.Fprintf(&b, "\n    %s %s %d (%s)", l.AccountCode, l.Side, l.Amount, l.Dimensions.BranchID)
+	}
+	return b.String()
+}
+
 // findAccountsHandler answers a find_accounts call by searching repo's chart.
 // Inactive matches are returned too, flagged, so the model can refuse a
 // disabled account the user named rather than silently substituting an active

@@ -25,6 +25,9 @@ type PromptRenderer struct {
 	Branches         []accounting.Branch
 	OperatorBranchID string
 	Clock            bookkeeping.Clock
+	// RecallEnabled adds the recall guidance to the prompt; set it when the
+	// bookkeeper carries a RecentEntries buffer and the recent_entries/get_entry tools.
+	RecallEnabled bool
 }
 
 // NewPromptRenderer snapshots the company, chart, periods, and branches from repo.
@@ -264,6 +267,9 @@ func (r PromptRenderer) systemPrompt() string {
 	b.WriteString(intentsText())
 	b.WriteString(systemPromptFormatRules)
 	b.WriteString(systemPromptBehaviorRules)
+	if r.RecallEnabled {
+		b.WriteString(systemPromptRecallRules)
+	}
 	b.WriteString("\n\n")
 	b.WriteString(r.tenantContext())
 	return b.String()
@@ -291,4 +297,10 @@ Behavior rules:
   - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
   - If the user explicitly asks to use an account shown as inactive (in the chart listing or by find_accounts), use reject and state that the account is disabled. Do not substitute a different account.
   - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
+
+	systemPromptRecallRules = `
+Recall rules:
+  - A request that carries a complete transaction (a date, a description, and amounts) is self-contained: act on it directly.
+  - A request that refers to earlier work in this session ("that entry", "redo it", "change it to ...") or that omits the date, amounts, or description needed to post is not self-contained: call recent_entries (and get_entry for a specific id) to recover the details before acting.
+  - Never invent a missing amount, date, or account. If a reference cannot be resolved from recall, use reject and ask for the missing detail.`
 )

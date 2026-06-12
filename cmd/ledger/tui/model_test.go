@@ -156,7 +156,7 @@ func TestModelCtrlCQuitsFromSelect(t *testing.T) {
 	}
 }
 
-func TestModelCtrlCCancelsRunningTurn(t *testing.T) {
+func TestModelEscCancelsRunningTurn(t *testing.T) {
 	m := chatModel(t, blockingSession{})
 	m.input.SetValue("do something slow")
 
@@ -166,12 +166,15 @@ func TestModelCtrlCCancelsRunningTurn(t *testing.T) {
 		t.Fatal("model should be running")
 	}
 
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(model)
 	if cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
-			t.Fatal("ctrl+c during a turn must cancel the turn, not quit")
+			t.Fatal("esc during a turn must cancel the turn, not quit")
 		}
+	}
+	if m.state != stateChat {
+		t.Fatalf("state = %v, want stateChat: cancelling a turn keeps the session open", m.state)
 	}
 
 	m = driveTurn(t, m)
@@ -181,6 +184,25 @@ func TestModelCtrlCCancelsRunningTurn(t *testing.T) {
 	last := m.lines[len(m.lines)-1]
 	if last.kind != lineSystem {
 		t.Errorf("last line kind = %v, want lineSystem (cancellation note)", last.kind)
+	}
+}
+
+func TestModelCtrlCQuitsDuringTurn(t *testing.T) {
+	m := chatModel(t, blockingSession{})
+	m.input.SetValue("do something slow")
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(model)
+	if !m.running {
+		t.Fatal("model should be running")
+	}
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl+c should produce a command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("ctrl+c during a turn should quit, got %T", cmd())
 	}
 }
 

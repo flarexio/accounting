@@ -23,6 +23,10 @@ type Bookkeeper struct {
 	Clock     bookkeeping.Clock
 	MaxTurns  int
 	Sink      loop.EventSink
+	// Recent, when set, is the session's bounded recent-entries buffer: posted
+	// entries are recorded into it and the recall tools (recent_entries,
+	// get_entry) read it. Nil disables recall (e.g. one-shot book-run).
+	Recent *RecentEntries
 }
 
 // Result is the outcome of one bookkeeping cycle.
@@ -62,6 +66,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 			return llm.Observation{}, err
 		}
 		posted = entry
+		a.Recent.Add(entry)
 		return llm.Observation{
 			Summary: fmt.Sprintf("Posted journal entry %s for %s with %d line(s).",
 				entry.ID, entry.Description, len(entry.Lines)),
@@ -77,7 +82,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		Engine:    a.Engine,
 		Validator: registry,
 		Executor:  executor,
-		Tools:     accountTools(a.Repo),
+		Tools:     a.tools(),
 		MaxTurns:  a.MaxTurns,
 		Sink:      a.Sink,
 	}
@@ -92,4 +97,16 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		Turns:       out.Turns,
 		Events:      out.Events,
 	}, err
+}
+
+// tools is the registry exposed to the model: always find_accounts, plus the
+// recall tools (recent_entries, get_entry) when a recent-entries buffer is present.
+func (a Bookkeeper) tools() map[string]loop.Tool {
+	tools := accountTools(a.Repo)
+	if a.Recent != nil {
+		for name, t := range recallTools(a.Repo, a.Recent) {
+			tools[name] = t
+		}
+	}
+	return tools
 }

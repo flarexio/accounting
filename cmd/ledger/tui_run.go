@@ -110,7 +110,7 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 		Label: branch.Name,
 		Hint:  branch.ID,
 		Start: func(ctx context.Context) (tui.Session, error) {
-			engine, err := buildBookEngine(ctx, repo, comp.llmCfg, branch.ID)
+			engine, err := buildBookEngine(ctx, repo, comp.llmCfg, branch.ID, true)
 			if err != nil {
 				return nil, err
 			}
@@ -120,6 +120,7 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 					Repo:      repo,
 					Publisher: bus,
 					MaxTurns:  comp.maxTurns,
+					Recent:    bookkeeper.NewRecentEntries(5),
 				},
 				repo: repo,
 			}, nil
