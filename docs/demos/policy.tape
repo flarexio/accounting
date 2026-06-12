@@ -30,11 +30,9 @@ Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現
 Sleep 1s
 Enter
 Sleep 20s
-# Hold on the 交際費 preview, then leave to the shell (chat → select → shell).
+# Hold on the 交際費 preview, then ctrl+c quits to the shell.
 Sleep 4s
-Escape
-Sleep 1s
-Escape
+Ctrl+C
 Sleep 1s
 
 # 2. Show the policy, then set it (it routes client gifts to 廣告費).
@@ -56,9 +54,7 @@ Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現
 Sleep 1s
 Enter
 Sleep 20s
-# Hold on the 廣告費 preview, then leave with esc.
+# Hold on the 廣告費 preview, then ctrl+c quits to the shell.
 Sleep 4s
-Escape
-Sleep 1s
-Escape
+Ctrl+C
 Sleep 1s

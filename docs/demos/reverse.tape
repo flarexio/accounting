@@ -38,9 +38,7 @@ Sleep 1s
 Enter
 Sleep 22s
 
-# Hold on the re-posted entry, then leave with esc (chat → select → shell).
+# Hold on the re-posted entry, then ctrl+c quits to the shell.
 Sleep 4s
-Escape
-Sleep 1s
-Escape
+Ctrl+C
 Sleep 1s

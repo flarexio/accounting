@@ -28,9 +28,7 @@ Enter
 # One reasoning turn ending in a reject observation.
 Sleep 18s
 
-# Hold on the reject, then leave with esc (chat → select → shell).
+# Hold on the reject, then ctrl+c quits to the shell.
 Sleep 4s
-Escape
-Sleep 1s
-Escape
+Ctrl+C
 Sleep 1s

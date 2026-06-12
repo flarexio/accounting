@@ -29,10 +29,9 @@ Enter
 # One reasoning turn: spinner → model rationale → preview.
 Sleep 20s
 
-# Hold on the posted entry so it can be read, then leave with esc (chat → select
-# → shell). esc is a no-op while a turn is still running, so it never cancels one.
+# Hold on the posted entry so it can be read, then ctrl+c quits to the shell.
+# (In chat, esc cancels a running turn / steps back; the turn waits above are long
+# enough that we're idle here, so a single ctrl+c is a clean quit.)
 Sleep 4s
-Escape
-Sleep 1s
-Escape
+Ctrl+C
 Sleep 1s
