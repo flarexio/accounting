@@ -154,13 +154,14 @@ NT$8,500，分公司 tc。
 
 ## 3. 沖轉情境
 
-### T-09 沖轉過帳錯誤（`reverse_journal`）
+### T-09 沖轉錯誤再重記（`reverse_journal` + recent-context recall）
 
-> 先記下 T-01 產生的 JE ID（系統行顯示 `posted entry JE-XXXX`），然後輸入：
+兩步、**同一個 session**（recall 記憶只在 session 內存活）。先記下 T-01 產生的 JE ID（系統行 `posted entry JE-XXXX`）。
+
+**Turn 1 — 沖銷**（只要求沖掉，不重記）：
 
 ```
-請沖轉分錄 JE-XXXX，金額誤打為 NT$105,000，
-正確金額應為 NT$95,000，需先沖銷再重新過帳。
+JE-XXXX 金額打錯了，幫我沖掉。
 ```
 
 預期：鏡像分錄（Cr/Dr 互換、金額相同）
@@ -171,9 +172,20 @@ NT$8,500，分公司 tc。
 預期 `JournalRelation`：
 - `type = reverses`
 - `reason = amount_error`（依據劇本的具體錯誤分類，**不應**落到 `other`）
-- `note` 描述具體事實，例如「金額應為 NT$95,000，誤打為 NT$105,000」，**不應**只寫「過帳錯誤」或「需要沖正」
+- `note` 描述具體事實，**不應**只寫「過帳錯誤」或「需要沖正」
 
-> `reverse_journal` 是機械式鏡像，適用於過帳錯誤。客戶退貨應改用 `post_journal` 搭配 4111 銷貨退回及折讓，由使用者明確指定。
+**Turn 2 — 重記正確金額**（口語、刻意不重述交易內容）：
+
+```
+再用正確的 94,500 含稅重新過一筆。
+```
+
+預期：agent 先呼叫 `recent_entries`（transcript 出現一條 `tool` 行）找回剛沖掉的是現金銷貨，再過一筆**新** `post_journal`：
+- Dr 1101 庫存現金 94,500
+- Cr 4101 銷貨收入 90,000
+- Cr 2191 銷項稅額 4,500
+
+> `reverse_journal` 只做機械式鏡像；「重記」是另一筆 `post_journal`，靠 recent-context recall 把 turn 1 的脈絡接起來。agent **絕不自行編造金額**，缺資訊則 `reject`。客戶退貨另走 `post_journal` 搭配 4111 銷貨退回及折讓，由使用者明確指定。
 
 ---
 
@@ -209,11 +221,12 @@ NT$8,500，分公司 tc。
 
 | 操作 | 時機 | 預期行為 |
 |------|------|----------|
-| `ctrl+c`（turn 進行中） | spinner 轉動時 | 顯示「turn cancelled」，保持 chat 畫面 |
+| `ESC`（turn 進行中） | spinner 轉動時 | 中止該 turn，顯示「turn cancelled」，保持 chat 畫面 |
 | `ESC`（turn 完成後） | 無 spinner 時 | 返回選擇畫面，session 關閉 |
+| `ctrl+c`（chat 畫面） | 任何時候 | 程式結束（不再用來中止 turn）|
 | `pgup` / `pgdn` | 有多輪對話時 | viewport 捲動，不觸發新 turn |
 | `ctrl+u` / `ctrl+d` | 同上 | 半頁捲動 |
-| `ctrl+c`（選擇畫面） | 未選任何選項 | 程式結束 |
+| `ctrl+c` / `q`（選擇畫面） | 未選任何選項 | 程式結束 |
 | 送出空白輸入 | 直接按 Enter | 不觸發 turn，input 維持 focus |
 
 ---
@@ -222,9 +235,10 @@ NT$8,500，分公司 tc。
 
 - [ ] T-01～T-08 每個情境都看到 `posted entry JE-XXXX`
 - [ ] T-05 薪資複雜金額貸方合計正確（1,234,567）
-- [ ] T-09 沖轉分錄借貸互換且金額相同，且 `JournalRelation.reason` 對應具體分類（非 `other`）、`note` 描述具體事實
+- [ ] T-09 turn 1 沖轉分錄借貸互換、金額相同，`JournalRelation.reason` 為具體分類（非 `other`）、`note` 具體
+- [ ] T-09 turn 2 出現 `recent_entries` 工具呼叫，重記分錄借方 1101 為 94,500（稅拆 90,000 + 4,500）
 - [ ] T-10 指定關帳期間時出現 `reject`，不過帳、不替換期間
 - [ ] T-12 停用科目出現 `reject`，LLM 不自行選替代科目
 - [ ] 所有 TWD 金額以整數輸入，無小數點
-- [ ] `ctrl+c` 取消 turn 後程式不崩潰、仍可繼續輸入
+- [ ] `ESC` 中止進行中的 turn 後程式不崩潰、仍可繼續輸入（`ctrl+c` 則是直接結束程式）
 - [ ] 返回選擇畫面後可重新進入 session

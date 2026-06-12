@@ -194,6 +194,16 @@ The shared Stoa contracts provide the agent harness vocabulary:
 
 The prompt can explain accounting judgment, but every accounting invariant must also be enforced by Go validators.
 
+## Recent-context recall
+
+Each `Bookkeeper.Book` call is stateless — it sees only the current request, not the prior turns. A multi-turn TUI session would otherwise lose the thread of a follow-up like "redo that entry with the correct amount". Rather than replay the conversation into the prompt (which grows unbounded and invites the model to guess), recall is **retrieval-based and agent-driven**:
+
+- A session carries a bounded `agent.RecentEntries` — the last N (=5) entries it posted, most recent first, older ones dropped. The executor records each posted entry into it; rejects record nothing.
+- Two tools read it: `recent_entries` lists the session's recent postings with their lines, and `get_entry` fetches one by id from the ledger (the authoritative store).
+- The prompt's recall rules let the model decide *when* to look: a self-contained request (a date, amounts, and a description) is acted on directly; a referential one — "that entry", "redo it", or one missing the fields needed to post — calls the tools first. It must never invent a missing amount; an unresolvable reference becomes a `reject`.
+
+So prompt size stays O(N) short lines regardless of how long the conversation runs, and detail is pulled from the ledger on demand — the same "ledger is the source of truth, the agent reads it through tools" shape as account search. One-shot entry points (`book-run`, `bench`) carry no memory and omit both the tools and the recall rules.
+
 ## Out Of Scope
 
 This foundation intentionally does not include:

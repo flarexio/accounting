@@ -156,10 +156,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+c" {
-		if m.running && m.cancel != nil {
-			m.cancel() // cancel the in-flight turn, but keep the program open
-			return m, nil
-		}
 		return m, tea.Quit
 	}
 
@@ -185,6 +181,9 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			if m.running {
+				if m.cancel != nil {
+					m.cancel() // cancel the in-flight turn, keep the program open
+				}
 				return m, nil
 			}
 			if m.session != nil {
@@ -496,7 +495,7 @@ func (m model) chatView() string {
 
 	status := " "
 	if m.running {
-		status = systemStyle.Render(m.spinner.View()+" running… ") + hintStyle.Render("(ctrl+c cancels this turn)")
+		status = systemStyle.Render(m.spinner.View()+" running… ") + hintStyle.Render("(esc cancels this turn)")
 	}
 
 	footer := keyHints(
@@ -506,7 +505,7 @@ func (m model) chatView() string {
 		[2]string{"ctrl+c", "quit"},
 	)
 	if m.running {
-		footer = keyHints([2]string{"ctrl+c", "cancel turn"})
+		footer = keyHints([2]string{"esc", "cancel turn"}, [2]string{"ctrl+c", "quit"})
 	}
 
 	return strings.Join([]string{

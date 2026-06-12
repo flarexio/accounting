@@ -18,7 +18,7 @@ The runnable command is `ledger`, under `cmd/ledger`. It is a small operator CLI
 
 ![Policy flip](docs/demos/policy.gif)
 
-**Reversing a mistaken entry.** `reverse_journal` mirrors the original and links it with a `reverses` `JournalRelation`.
+**Correcting a mistaken entry.** First `reverse_journal` mirrors the original and links it with a `reverses` `JournalRelation`; then a follow-up "re-post with the correct amount" is resolved by recent-context recall — the agent looks up what it just reversed and posts the fix, without the request restating the transaction.
 
 ![Reversal](docs/demos/reverse.gif)
 

@@ -29,16 +29,17 @@ Sleep 2s
 Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現金付了 6,000。"
 Sleep 1s
 Enter
-Sleep 14s
-Sleep 2s
+Sleep 20s
+# Hold on the 交際費 preview, then ctrl+c quits to the shell.
+Sleep 4s
 Ctrl+C
+Sleep 1s
 
 # 2. Show the policy, then set it (it routes client gifts to 廣告費).
-Sleep 1s
 Type "cat docs/demos/policy.md"
 Sleep 1s
 Enter
-Sleep 3s
+Sleep 4s
 Type "ledger policy set --file docs/demos/policy.md"
 Sleep 1s
 Enter
@@ -52,7 +53,8 @@ Sleep 2s
 Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現金付了 6,000。"
 Sleep 1s
 Enter
-Sleep 14s
-Sleep 2s
+Sleep 20s
+# Hold on the 廣告費 preview, then ctrl+c quits to the shell.
+Sleep 4s
 Ctrl+C
 Sleep 1s

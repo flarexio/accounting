@@ -103,7 +103,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, repo, llmCfg, "")
+	engine, err := buildBookEngine(ctx, repo, llmCfg, "", false)
 	if err != nil {
 		return err
 	}
