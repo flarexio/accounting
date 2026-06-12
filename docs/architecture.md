@@ -200,7 +200,7 @@ One request can perform several actions — the canonical case is "reverse that 
 
 Every entry point is multi-action because `bookkeeping.Intent` implements `IsFinal` — TUI, `book-run`, and `bench` alike. Two bounds guard a runaway loop: `MaxTurns` (default 8) caps total turns including tool calls, and `maxPostsPerRequest` caps how many entries one request may post regardless of the turn budget.
 
-A multi-action request is **not yet atomic**: each action publishes as it executes, so a request that fails after its first action leaves that action committed. `bookkeeping.Staging` (buffer events, commit-all or abort) is the mechanism for making the batch all-or-nothing; wiring it into the agent is tracked separately.
+A multi-action request commits **all-or-nothing**. The agent runs the loop against a `bookkeeping.Staging` view: every action's event is buffered, not published, and the staging `Repository` overlays the buffered entries onto its reads so a later action (and the `get_entry` recall tool) sees an entry the request has already posted but not yet committed. A clean run flushes the buffer to the bus in order; any failure — including a partial run that exhausts `MaxTurns` — aborts and discards it, leaving the ledger untouched. `Result.Entries` lists what a request committed (empty on reject or abort). The one residual gap is the flush itself: JetStream has no atomic multi-publish, so a broker rejection partway through `Commit` can still leave an earlier event published — a millisecond window accepted for the single-operator ledger.
 
 ## Recent-context recall
 

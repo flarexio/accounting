@@ -87,6 +87,17 @@ func (s *Staging) stagedSubjectCount(subject string) uint64 {
 	return n
 }
 
+// stagedEntries returns the journal entries buffered so far, in staged order.
+func (s *Staging) stagedEntries() []accounting.JournalEntry {
+	var out []accounting.JournalEntry
+	for _, e := range s.events {
+		if jp, ok := e.event.(accounting.JournalPosted); ok {
+			out = append(out, jp.Entry)
+		}
+	}
+	return out
+}
+
 type stagingPublisher struct{ staging *Staging }
 
 func (p stagingPublisher) Publish(_ context.Context, evt Event, expect accounting.ExpectedSequence) error {
@@ -113,4 +124,38 @@ func (r stagingRepo) LastSequence(ctx context.Context, subject string) (uint64, 
 		return 0, err
 	}
 	return base + r.staging.stagedSubjectCount(subject), nil
+}
+
+// Entry, Entries, and EntriesByPeriod overlay the staged-but-uncommitted entries
+// on the underlying repo so a later action in the same request — and the recall
+// tools (get_entry) — see an entry the request has already posted but not committed.
+
+func (r stagingRepo) Entry(ctx context.Context, id string) (accounting.JournalEntry, bool, error) {
+	for _, e := range r.staging.stagedEntries() {
+		if e.ID == id {
+			return e, true, nil
+		}
+	}
+	return r.LedgerRepository.Entry(ctx, id)
+}
+
+func (r stagingRepo) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
+	base, err := r.LedgerRepository.Entries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(base, r.staging.stagedEntries()...), nil
+}
+
+func (r stagingRepo) EntriesByPeriod(ctx context.Context, periodID string) ([]accounting.JournalEntry, error) {
+	base, err := r.LedgerRepository.EntriesByPeriod(ctx, periodID)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range r.staging.stagedEntries() {
+		if e.PeriodID == periodID {
+			base = append(base, e)
+		}
+	}
+	return base, nil
 }

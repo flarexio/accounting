@@ -37,8 +37,12 @@ type Bookkeeper struct {
 
 // Result is the outcome of one bookkeeping cycle.
 type Result struct {
-	Intent      bookkeeping.Intent
-	Entry       accounting.JournalEntry
+	Intent bookkeeping.Intent
+	// Entry is the last entry the request committed; zero when none committed.
+	Entry accounting.JournalEntry
+	// Entries lists every entry the request committed, in posting order. Empty
+	// when the request was rejected or aborted (a partial request commits nothing).
+	Entries     []accounting.JournalEntry
 	Observation llm.Observation
 	Turns       int
 	Events      []llm.CycleEvent
@@ -56,10 +60,13 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		return Result{}, errors.New("bookkeeper: agent has no event publisher")
 	}
 
-	registry := bookkeeping.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
+	// Staging buffers every action's event so a multi-action request commits
+	// all-or-nothing: a clean run flushes to the bus, any failure (including a
+	// partial run that hits MaxTurns) discards, leaving the ledger untouched.
+	staging := bookkeeping.NewStaging(a.Repo, a.Publisher)
+	registry := bookkeeping.NewBookkeepingRegistry(staging.Repo(), staging.Publisher(), a.Clock, a.Subject)
 
-	var posted accounting.JournalEntry
-	posts := 0
+	var posted []accounting.JournalEntry
 	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
 		if intent.Kind == bookkeeping.IntentReject {
 			reason := "request cannot be fulfilled"
@@ -68,16 +75,14 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 			}
 			return llm.Observation{Summary: reason}, nil
 		}
-		if posts >= maxPostsPerRequest {
+		if len(posted) >= maxPostsPerRequest {
 			return llm.Observation{}, fmt.Errorf("bookkeeping: request already posted %d entries; finish it (mark a final action or reject)", maxPostsPerRequest)
 		}
 		entry, err := registry.Execute(ctx, intent)
 		if err != nil {
 			return llm.Observation{}, err
 		}
-		posts++
-		posted = entry
-		a.Recent.Add(entry)
+		posted = append(posted, entry)
 		return llm.Observation{
 			Summary: fmt.Sprintf("Posted journal entry %s for %s with %d line(s).",
 				entry.ID, entry.Description, len(entry.Lines)),
@@ -93,7 +98,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		Engine:    a.Engine,
 		Validator: registry,
 		Executor:  executor,
-		Tools:     a.tools(),
+		Tools:     a.toolsFor(staging.Repo()),
 		MaxTurns:  a.MaxTurns,
 		Sink:      a.Sink,
 	}
@@ -101,21 +106,44 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	out, err := runner.Run(ctx, llm.ReasoningInput{
 		Task: request,
 	})
+
+	// Commit on a clean run; abort (discard the buffer) on any failure so a
+	// partial multi-action request leaves nothing in the ledger.
+	committed := posted
+	if err != nil {
+		staging.Abort()
+		committed = nil
+	} else if cErr := staging.Commit(ctx); cErr != nil {
+		err = cErr
+		committed = nil
+	} else {
+		for _, e := range committed {
+			a.Recent.Add(e)
+		}
+	}
+
+	var last accounting.JournalEntry
+	if n := len(committed); n > 0 {
+		last = committed[n-1]
+	}
 	return Result{
 		Intent:      out.Reasoning.Intent,
-		Entry:       posted,
+		Entry:       last,
+		Entries:     committed,
 		Observation: out.Observation,
 		Turns:       out.Turns,
 		Events:      out.Events,
 	}, err
 }
 
-// tools is the registry exposed to the model: always find_accounts, plus the
+// toolsFor is the registry exposed to the model: always find_accounts, plus the
 // recall tools (recent_entries, get_entry) when a recent-entries buffer is present.
-func (a Bookkeeper) tools() map[string]loop.Tool {
-	tools := accountTools(a.Repo)
+// repo is the staging view, so get_entry resolves entries this request has already
+// posted but not yet committed.
+func (a Bookkeeper) toolsFor(repo accounting.LedgerRepository) map[string]loop.Tool {
+	tools := accountTools(repo)
 	if a.Recent != nil {
-		for name, t := range recallTools(a.Repo, a.Recent) {
+		for name, t := range recallTools(repo, a.Recent) {
 			tools[name] = t
 		}
 	}

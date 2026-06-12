@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/messaging/inproc"
 	"github.com/flarexio/accounting/persistence/memory"
+	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -300,9 +302,44 @@ func TestAgent_MultiActionReverseThenRepostInOneRequest(t *testing.T) {
 	if res.Turns != 2 {
 		t.Fatalf("turns = %d, want 2 (reverse + final post)", res.Turns)
 	}
+	if len(res.Entries) != 2 {
+		t.Fatalf("res.Entries = %d, want 2 (reversal + correction)", len(res.Entries))
+	}
+	if res.Entry.ID != res.Entries[1].ID {
+		t.Fatalf("res.Entry should be the last committed entry, got %q want %q", res.Entry.ID, res.Entries[1].ID)
+	}
 	entries, _ := repo.Entries(ctx)
 	if len(entries) != 3 {
 		t.Fatalf("expected original + reversal + correction = 3 entries, got %d", len(entries))
+	}
+}
+
+// A multi-action request that never marks a final action runs to MaxTurns and
+// aborts: the staged entries are discarded, so the ledger keeps only what earlier
+// requests committed and the Result reports nothing committed.
+func TestAgent_PartialMultiActionAbortsWithoutCommitting(t *testing.T) {
+	ctx := context.Background()
+	repo := awsBillRepo(t)
+	bus := wireBus(t, repo)
+
+	// Every turn posts a non-final entry, so the loop never finishes and exhausts MaxTurns.
+	engine := fakeEngineFunc(func(context.Context, llm.ReasoningInput) (llm.ReasoningOutput[bookkeeping.Intent], error) {
+		intent := postIntent(balancedAWSIntent())
+		intent.Final = false
+		return llm.IntentOutput(intent, nil, "keep posting, never final"), nil
+	})
+	bk := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+
+	res, err := bk.Book(ctx, "do several things but never finish")
+	if !errors.Is(err, loop.ErrMaxTurnsExceeded) {
+		t.Fatalf("err = %v, want ErrMaxTurnsExceeded", err)
+	}
+	if len(res.Entries) != 0 || res.Entry.ID != "" {
+		t.Fatalf("aborted request committed nothing, got Entry=%q Entries=%d", res.Entry.ID, len(res.Entries))
+	}
+	entries, _ := repo.Entries(ctx)
+	if len(entries) != 0 {
+		t.Fatalf("expected the ledger untouched after abort, got %d entries", len(entries))
 	}
 }
 

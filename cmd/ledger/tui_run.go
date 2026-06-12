@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -146,8 +147,16 @@ func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSi
 	agent.Sink = sink
 	res, err := agent.Book(ctx, request)
 	out := tui.Outcome{Turns: res.Turns}
-	if res.Entry.ID != "" {
-		out.Summary = fmt.Sprintf("posted entry %s", res.Entry.ID)
+	switch len(res.Entries) {
+	case 0:
+	case 1:
+		out.Summary = fmt.Sprintf("posted entry %s", res.Entries[0].ID)
+	default:
+		ids := make([]string, len(res.Entries))
+		for i, e := range res.Entries {
+			ids[i] = e.ID
+		}
+		out.Summary = fmt.Sprintf("posted %d entries: %s", len(ids), strings.Join(ids, ", "))
 	}
 	return out, err
 }
