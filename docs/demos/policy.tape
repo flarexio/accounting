@@ -12,6 +12,7 @@ Set Width 1280
 Set Height 760
 Set Padding 20
 Set Theme "Catppuccin Mocha"
+Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
 Hide
 Type "ledger seed seed/taiwan_ledger.yaml && ledger policy set <<<''" Enter

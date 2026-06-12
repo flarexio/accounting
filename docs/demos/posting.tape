@@ -11,6 +11,7 @@ Set Width 1200
 Set Height 720
 Set Padding 20
 Set Theme "Catppuccin Mocha"
+Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
 # Seed off-camera so the demo opens straight into the TUI.
 Hide

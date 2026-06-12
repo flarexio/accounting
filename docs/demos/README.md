@@ -12,6 +12,10 @@ GIF.
 - The `ledger` binary on `PATH` (`go install ./cmd/ledger`).
 - A working `~/.flarex/accounting/config.yaml` with an OpenAI key: the TUI and
   `book-run` demos make real model calls.
+- A CJK font, or the Chinese transcript renders as tofu (□). On Debian/Ubuntu:
+  `sudo apt install -y fonts-noto-cjk && fc-cache -f`. The tapes set
+  `FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"` so Latin stays monospace
+  and Chinese falls back to Noto.
 
 ## Record
 
