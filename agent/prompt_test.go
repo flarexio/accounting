@@ -104,6 +104,27 @@ func TestPromptRenderer_OmitsPolicySectionWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestPromptRenderer_RecallRulesGatedByFlag(t *testing.T) {
+	_, repo := awsBillScenario(t)
+	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+
+	off, _ := renderer.Render(llm.ReasoningInput{Task: "x"})
+	if strings.Contains(off[0].Content, "Recall rules") {
+		t.Errorf("recall rules should be absent when RecallEnabled is false")
+	}
+
+	renderer.RecallEnabled = true
+	on, _ := renderer.Render(llm.ReasoningInput{Task: "x"})
+	for _, want := range []string{"Recall rules", "recent_entries", "self-contained"} {
+		if !strings.Contains(on[0].Content, want) {
+			t.Errorf("recall-enabled prompt missing %q", want)
+		}
+	}
+}
+
 func TestPromptRenderer_IncludesNowFromClock(t *testing.T) {
 	_, repo := awsBillScenario(t)
 	renderer, err := agent.NewPromptRenderer(context.Background(), repo)
