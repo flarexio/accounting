@@ -6,6 +6,26 @@ It is also a Stoa-style agent harness: domain rules decide what counts as valid,
 
 The runnable command is `ledger`, under `cmd/ledger`. It is a small operator CLI for seeding ledger metadata and exercising the bookkeeping workflow.
 
+## Demos
+
+> Generated from the VHS tapes in [`docs/demos/`](docs/demos/) — see that folder to record or re-record them.
+
+**Posting a journal entry in the TUI.** Natural-language request → model reasoning → validated entry preview.
+
+![TUI posting](docs/demos/posting.gif)
+
+**Company policy steering account choice.** The same client-gift transaction lands in 交際費 (6115); after `ledger policy set`, it lands in 廣告費 (6108) and the memo cites the policy.
+
+![Policy flip](docs/demos/policy.gif)
+
+**Reversing a mistaken entry.** `reverse_journal` mirrors the original and links it with a `reverses` `JournalRelation`.
+
+![Reversal](docs/demos/reverse.gif)
+
+**Refusing an invalid request.** Posting into a closed period is rejected by the validator; the agent does not silently retarget it.
+
+![Rejection](docs/demos/reject.gif)
+
 ## Philosophy
 
 This repository follows the Stoa idea that an agent is knowing meeting doing. A model response is not enough; the agent must produce a verifiable action.
