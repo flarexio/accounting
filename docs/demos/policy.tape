@@ -1,8 +1,8 @@
 # VHS tape: company policy flips the chosen account on the same transaction.
 # Record:  vhs docs/demos/policy.tape   →   docs/demos/policy.gif
-# Prereqs: `ledger` on PATH, a seeded ledger, an OpenAI key in config.yaml.
-# This is a shell A/B (not the TUI): book-run snapshots the company at start, so
-# the policy must be set BETWEEN two separate book-run processes to take effect.
+# Prereqs: pre-seed the ledger (slow, not recorded), `ledger` on PATH, an OpenAI
+# key in config.yaml. This is a shell A/B (not the TUI): book-run snapshots the
+# company at start, so the policy is set BETWEEN two book-run processes to take effect.
 
 Output docs/demos/policy.gif
 
@@ -14,8 +14,10 @@ Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
+# Pre-seed off-camera first (slow, not recorded). Here we only clear any leftover
+# policy so the A/B starts from the no-policy state.
 Hide
-Type "ledger seed seed/taiwan_ledger.yaml && ledger policy set <<<''" Enter
+Type "ledger policy set <<<''" Enter
 Sleep 2s
 Show
 

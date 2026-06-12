@@ -1,7 +1,8 @@
 # VHS tape: TUI happy-path posting (the Charm-style facelift).
 # Record:  vhs docs/demos/posting.tape   →   docs/demos/posting.gif
-# Prereqs: `ledger` on PATH, a seeded ledger, and an OpenAI key in config.yaml.
-# The Sleep durations cover one LLM turn — tune them to your model's latency.
+# Prereqs: pre-seed the ledger (`ledger seed seed/taiwan_ledger.yaml`) — it's slow
+# (embeds the chart), so it is NOT recorded here. Also needs `ledger` on PATH and
+# an OpenAI key in config.yaml. The Sleeps cover one LLM turn — tune to your model.
 
 Output docs/demos/posting.gif
 
@@ -12,12 +13,6 @@ Set Height 720
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
-
-# Seed off-camera so the demo opens straight into the TUI.
-Hide
-Type "ledger seed seed/taiwan_ledger.yaml" Enter
-Sleep 2s
-Show
 
 Type "ledger tui" Enter
 Sleep 3s

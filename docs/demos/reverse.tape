@@ -1,7 +1,10 @@
 # VHS tape: TUI reversal — reverse_journal mirrors an entry and links it.
 # Record:  vhs docs/demos/reverse.tape   →   docs/demos/reverse.gif
-# Prereqs: `ledger` on PATH, a seeded ledger, an OpenAI key in config.yaml.
-# Assumes JE-0001 already exists (the seed/posting demo). Adjust the JE id if not.
+# Prereqs (all pre-done, not recorded — they are slow): seed the ledger, then post
+# at least one entry so JE-0001 exists, e.g.
+#   ledger book-run --request '5/10 台北總公司現金銷售商品 NT$105,000，含 5% 銷項稅額 5,000。'
+# Adjust the JE id below if your first entry is not JE-0001. Needs `ledger` on PATH
+# and an OpenAI key in config.yaml.
 
 Output docs/demos/reverse.gif
 
@@ -12,14 +15,6 @@ Set Height 760
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
-
-Hide
-Type "ledger seed seed/taiwan_ledger.yaml" Enter
-Sleep 2s
-# A first entry to reverse.
-Type "ledger book-run --request '5/10 台北總公司現金銷售商品 NT$105,000，含 5% 銷項稅額 5,000。'" Enter
-Sleep 14s
-Show
 
 Type "ledger tui" Enter
 Sleep 3s

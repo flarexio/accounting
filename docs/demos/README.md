@@ -17,6 +17,17 @@ GIF.
   `FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"` so Latin stays monospace
   and Chinese falls back to Noto.
 
+## Pre-seed first
+
+Seeding is slow (it embeds the chart of accounts) so it is **not** recorded by
+the tapes — do it once before recording:
+
+```bash
+ledger seed seed/taiwan_ledger.yaml
+# reverse.tape also needs one posted entry (JE-0001):
+ledger book-run --request '5/10 台北總公司現金銷售商品 NT$105,000，含 5% 銷項稅額 5,000。'
+```
+
 ## Record
 
 Run each tape from the repository root so the relative `Output` and `--file`

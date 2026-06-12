@@ -1,7 +1,8 @@
 # VHS tape: TUI rejection — the validator blocks a closed period; the agent
 # does not silently retarget it.
 # Record:  vhs docs/demos/reject.tape   →   docs/demos/reject.gif
-# Prereqs: `ledger` on PATH, a seeded ledger, an OpenAI key in config.yaml.
+# Prereqs: pre-seed the ledger (slow, not recorded), `ledger` on PATH, an OpenAI
+# key in config.yaml.
 
 Output docs/demos/reject.gif
 
@@ -12,11 +13,6 @@ Set Height 720
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
-
-Hide
-Type "ledger seed seed/taiwan_ledger.yaml" Enter
-Sleep 2s
-Show
 
 Type "ledger tui" Enter
 Sleep 3s
