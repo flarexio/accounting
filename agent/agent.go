@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/flarexio/accounting"
 	"github.com/flarexio/accounting/bookkeeping"
@@ -37,12 +38,9 @@ type Bookkeeper struct {
 
 // Result is the outcome of one bookkeeping cycle.
 type Result struct {
-	Intent bookkeeping.Intent
-	// Entry is the last entry the request committed; zero when none committed.
-	Entry accounting.JournalEntry
-	// Entries lists every entry the request committed, in posting order. Empty
-	// when the request was rejected or aborted (a partial request commits nothing).
-	Entries     []accounting.JournalEntry
+	Intent      bookkeeping.Intent
+	Entry       accounting.JournalEntry   // last committed entry; zero if none
+	Entries     []accounting.JournalEntry // every committed entry, in order
 	Observation llm.Observation
 	Turns       int
 	Events      []llm.CycleEvent
@@ -60,9 +58,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		return Result{}, errors.New("bookkeeper: agent has no event publisher")
 	}
 
-	// Staging buffers every action's event so a multi-action request commits
-	// all-or-nothing: a clean run flushes to the bus, any failure (including a
-	// partial run that hits MaxTurns) discards, leaving the ledger untouched.
+	// Staging makes the request commit all-or-nothing.
 	staging := bookkeeping.NewStaging(a.Repo, a.Publisher)
 	registry := bookkeeping.NewBookkeepingRegistry(staging.Repo(), staging.Publisher(), a.Clock, a.Subject)
 
@@ -107,8 +103,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		Task: request,
 	})
 
-	// Commit on a clean run; abort (discard the buffer) on any failure so a
-	// partial multi-action request leaves nothing in the ledger.
+	// Commit on a clean run, abort on any failure.
 	committed := posted
 	if err != nil {
 		staging.Abort()
@@ -136,16 +131,13 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	}, err
 }
 
-// toolsFor is the registry exposed to the model: always find_accounts, plus the
-// recall tools (recent_entries, get_entry) when a recent-entries buffer is present.
-// repo is the staging view, so get_entry resolves entries this request has already
-// posted but not yet committed.
+// toolsFor exposes find_accounts plus, when a recent-entries buffer is present,
+// the recall tools (recent_entries, get_entry). repo is the staging view so
+// get_entry also resolves staged-but-uncommitted entries.
 func (a Bookkeeper) toolsFor(repo accounting.LedgerRepository) map[string]loop.Tool {
 	tools := accountTools(repo)
 	if a.Recent != nil {
-		for name, t := range recallTools(repo, a.Recent) {
-			tools[name] = t
-		}
+		maps.Copy(tools, recallTools(repo, a.Recent))
 	}
 	return tools
 }

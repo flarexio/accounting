@@ -20,9 +20,7 @@ import (
 type bookRunOutput struct {
 	Request string             `json:"request"`
 	Turns   int                `json:"turns"`
-	Intent  bookkeeping.Intent `json:"intent"`
-	// Entries lists every entry the request committed (one per action); Entry is
-	// the last of them, kept for single-action convenience.
+	Intent      bookkeeping.Intent        `json:"intent"`
 	Entries     []accounting.JournalEntry `json:"entries"`
 	Entry       accounting.JournalEntry   `json:"entry"`
 	Observation llm.Observation           `json:"observation"`

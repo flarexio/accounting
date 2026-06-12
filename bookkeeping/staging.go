@@ -126,9 +126,8 @@ func (r stagingRepo) LastSequence(ctx context.Context, subject string) (uint64, 
 	return base + r.staging.stagedSubjectCount(subject), nil
 }
 
-// Entry, Entries, and EntriesByPeriod overlay the staged-but-uncommitted entries
-// on the underlying repo so a later action in the same request — and the recall
-// tools (get_entry) — see an entry the request has already posted but not committed.
+// Entry, Entries, and EntriesByPeriod overlay the staged entries on the repo so
+// a later action and the recall tools see what this request has already posted.
 
 func (r stagingRepo) Entry(ctx context.Context, id string) (accounting.JournalEntry, bool, error) {
 	for _, e := range r.staging.stagedEntries() {
