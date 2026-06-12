@@ -267,6 +267,7 @@ func (r PromptRenderer) systemPrompt() string {
 	b.WriteString(intentsText())
 	b.WriteString(systemPromptFormatRules)
 	b.WriteString(systemPromptBehaviorRules)
+	b.WriteString(systemPromptMultiActionRules)
 	if r.RecallEnabled {
 		b.WriteString(systemPromptRecallRules)
 	}
@@ -297,6 +298,12 @@ Behavior rules:
   - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
   - If the user explicitly asks to use an account shown as inactive (in the chart listing or by find_accounts), use reject and state that the account is disabled. Do not substitute a different account.
   - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
+
+	systemPromptMultiActionRules = `
+Completing a request:
+  - You may take several actions in one request -- e.g. reverse a wrong entry, then re-post the correction. Emit one action per turn.
+  - Set "final": true on the action that finishes the request, "final": false on an action you will follow with another. A lone post, reverse, or reject is itself final.
+  - The loop stops after a final action, so always finish with one -- never leave a request without a final action.`
 
 	systemPromptRecallRules = `
 Recall rules:

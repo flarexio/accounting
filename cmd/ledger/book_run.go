@@ -50,7 +50,7 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 			&cli.IntFlag{
 				Name:  "max-turns",
 				Usage: "maximum reasoning turns",
-				Value: 3,
+				Value: 8,
 			},
 			&cli.StringFlag{
 				Name:  "work-dir",

@@ -44,7 +44,7 @@ func newBenchCommand(stdout io.Writer) *cli.Command {
 			&cli.IntFlag{
 				Name:  "max-turns",
 				Usage: "default reasoning turn ceiling for cases that do not set their own",
-				Value: 3,
+				Value: 8,
 			},
 			&cli.IntFlag{
 				Name:  "repeats",

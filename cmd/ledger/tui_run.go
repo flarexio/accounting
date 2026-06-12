@@ -32,7 +32,7 @@ func newTUICommand() *cli.Command {
 			&cli.IntFlag{
 				Name:  "max-turns",
 				Usage: "maximum reasoning turns per request",
-				Value: 3,
+				Value: 8,
 			},
 			&cli.StringFlag{
 				Name:  "work-dir",

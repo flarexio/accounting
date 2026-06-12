@@ -17,13 +17,18 @@ const (
 
 // Intent is the discriminated union the agent's model emits. Kind names the
 // use case to run; the payload field matching Kind carries its typed
-// arguments, and any others are ignored.
+// arguments, and any others are ignored. Final marks the request's last action
+// so the multi-action loop stops after executing it.
 type Intent struct {
 	Kind    IntentKind                `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
 	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`
 	Reject  *RejectIntent             `json:"reject,omitempty"`
+	Final   bool                      `json:"final"`
 }
+
+// IsFinal reports whether this is the request's last action; the loop stops after executing it.
+func (i Intent) IsFinal() bool { return i.Final }
 
 // RejectIntent is the payload of a reject Intent.
 type RejectIntent struct {
@@ -90,11 +95,15 @@ func IntentSchema() json.RawMessage {
 const intentSchemaJSON = `{
   "type": "object",
   "additionalProperties": false,
-  "required": ["kind", "post_journal", "reverse_journal", "reject"],
+  "required": ["kind", "post_journal", "reverse_journal", "reject", "final"],
   "properties": {
     "kind": {
       "type": "string",
       "enum": ["post_journal", "reverse_journal", "reject"]
+    },
+    "final": {
+      "type": "boolean",
+      "description": "true if this action completes the request; false if you will follow it with another action this turn-cycle. A single post/reverse/reject is itself final. The loop stops once it executes a final action."
     },
     "post_journal": {
       "anyOf": [
