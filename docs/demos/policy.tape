@@ -27,7 +27,11 @@ Sleep 1s
 Enter
 Sleep 14s
 
-# 2. Set the policy that routes client gifts to 廣告費.
+# 2. Show the policy, then set it (it routes client gifts to 廣告費).
+Type "cat docs/demos/policy.md"
+Sleep 1s
+Enter
+Sleep 3s
 Type "ledger policy set --file docs/demos/policy.md"
 Sleep 1s
 Enter
