@@ -39,8 +39,7 @@ type Bookkeeper struct {
 // Result is the outcome of one bookkeeping cycle.
 type Result struct {
 	Intent      bookkeeping.Intent
-	Entry       accounting.JournalEntry   // last committed entry; zero if none
-	Entries     []accounting.JournalEntry // every committed entry, in order
+	Entries     []accounting.JournalEntry // every committed entry, in order; empty on reject/abort
 	Observation llm.Observation
 	Turns       int
 	Events      []llm.CycleEvent
@@ -117,13 +116,8 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		}
 	}
 
-	var last accounting.JournalEntry
-	if n := len(committed); n > 0 {
-		last = committed[n-1]
-	}
 	return Result{
 		Intent:      out.Reasoning.Intent,
-		Entry:       last,
 		Entries:     committed,
 		Observation: out.Observation,
 		Turns:       out.Turns,

@@ -21,9 +21,9 @@ type Score struct {
 	Notes           []string `json:"notes,omitempty"`
 }
 
-// Compare grades result against gold. The model's proposal (result.Intent)
-// drives the comparison; result.Entry is ignored because validation failures
-// leave it empty and would distort the kind and payload signals.
+// Compare grades result against gold. Only the model's proposal (result.Intent)
+// drives the comparison; the committed entries are ignored because validation
+// failures leave none and would distort the kind and payload signals.
 // validation_clean is the separate axis for whether any validation_error or
 // execution_error events appeared during the cycle.
 func Compare(result agent.Result, gold Gold) Score {

@@ -22,7 +22,6 @@ type bookRunOutput struct {
 	Turns   int                `json:"turns"`
 	Intent      bookkeeping.Intent        `json:"intent"`
 	Entries     []accounting.JournalEntry `json:"entries"`
-	Entry       accounting.JournalEntry   `json:"entry"`
 	Observation llm.Observation           `json:"observation"`
 	Events      []llm.CycleEvent          `json:"events"`
 	Feedback    []string                  `json:"feedback"`
@@ -122,7 +121,6 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Turns:       res.Turns,
 		Intent:      res.Intent,
 		Entries:     res.Entries,
-		Entry:       res.Entry,
 		Observation: res.Observation,
 		Events:      res.Events,
 		Feedback:    extractFeedback(res.Events),
