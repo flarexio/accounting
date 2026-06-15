@@ -406,6 +406,10 @@ func (r *Repository) LastSequence(_ context.Context, subject string) (uint64, er
 func cloneAccountingEntry(e accounting.JournalEntry) accounting.JournalEntry {
 	out := e
 	out.Lines = cloneAccountingLines(e.Lines)
+	if e.Source != nil {
+		src := *e.Source
+		out.Source = &src
+	}
 	return out
 }
 

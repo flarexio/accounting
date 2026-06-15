@@ -67,6 +67,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 		Description: intent.Description,
 		Lines:       intent.Lines,
 		PostedAt:    clock(),
+		Source:      intent.Source,
 	}
 
 	if err := uc.Publisher.Publish(ctx, accounting.JournalPosted{Entry: entry}, accounting.ExpectedSequence{

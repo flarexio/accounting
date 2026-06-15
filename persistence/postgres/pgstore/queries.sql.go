@@ -75,7 +75,7 @@ func (q *Queries) GetCounterparty(ctx context.Context, id string) (Counterparty,
 }
 
 const getEntry = `-- name: GetEntry :one
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 WHERE id = $1
 `
@@ -91,6 +91,8 @@ func (q *Queries) GetEntry(ctx context.Context, id string) (JournalEntry, error)
 		&i.Currency,
 		&i.Description,
 		&i.PostedAt,
+		&i.SourceKind,
+		&i.SourceNumber,
 	)
 	return i, err
 }
@@ -150,19 +152,21 @@ func (q *Queries) GetRelation(ctx context.Context, arg GetRelationParams) (Journ
 
 const insertEntry = `-- name: InsertEntry :exec
 INSERT INTO journal_entries (
-    id, sequence, entry_date, period_id, currency, description, posted_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
 `
 
 type InsertEntryParams struct {
-	ID          string
-	Sequence    int64
-	EntryDate   pgtype.Date
-	PeriodID    string
-	Currency    string
-	Description string
-	PostedAt    pgtype.Timestamptz
+	ID           string
+	Sequence     int64
+	EntryDate    pgtype.Date
+	PeriodID     string
+	Currency     string
+	Description  string
+	PostedAt     pgtype.Timestamptz
+	SourceKind   string
+	SourceNumber string
 }
 
 // Idempotent: NATS JetStream redelivers on consumer crash after commit but
@@ -178,26 +182,29 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 		arg.Currency,
 		arg.Description,
 		arg.PostedAt,
+		arg.SourceKind,
+		arg.SourceNumber,
 	)
 	return err
 }
 
 const insertLine = `-- name: InsertLine :exec
 INSERT INTO journal_lines (
-    entry_id, line_no, account_code, side, amount, memo, branch_id, tags
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    entry_id, line_no, account_code, side, amount, memo, branch_id, counterparty_id, tags
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (entry_id, line_no) DO NOTHING
 `
 
 type InsertLineParams struct {
-	EntryID     string
-	LineNo      int32
-	AccountCode string
-	Side        string
-	Amount      int64
-	Memo        string
-	BranchID    string
-	Tags        []byte
+	EntryID        string
+	LineNo         int32
+	AccountCode    string
+	Side           string
+	Amount         int64
+	Memo           string
+	BranchID       string
+	CounterpartyID string
+	Tags           []byte
 }
 
 // Idempotent for the same reason as InsertEntry.
@@ -210,6 +217,7 @@ func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) error {
 		arg.Amount,
 		arg.Memo,
 		arg.BranchID,
+		arg.CounterpartyID,
 		arg.Tags,
 	)
 	return err
@@ -368,7 +376,7 @@ func (q *Queries) ListCounterparties(ctx context.Context) ([]Counterparty, error
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 ORDER BY sequence
 `
@@ -390,6 +398,8 @@ func (q *Queries) ListEntries(ctx context.Context) ([]JournalEntry, error) {
 			&i.Currency,
 			&i.Description,
 			&i.PostedAt,
+			&i.SourceKind,
+			&i.SourceNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -402,7 +412,7 @@ func (q *Queries) ListEntries(ctx context.Context) ([]JournalEntry, error) {
 }
 
 const listEntriesByPeriod = `-- name: ListEntriesByPeriod :many
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 WHERE period_id = $1
 ORDER BY sequence
@@ -425,6 +435,8 @@ func (q *Queries) ListEntriesByPeriod(ctx context.Context, periodID string) ([]J
 			&i.Currency,
 			&i.Description,
 			&i.PostedAt,
+			&i.SourceKind,
+			&i.SourceNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -437,7 +449,7 @@ func (q *Queries) ListEntriesByPeriod(ctx context.Context, periodID string) ([]J
 }
 
 const listEntryLines = `-- name: ListEntryLines :many
-SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
+SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags, counterparty_id
 FROM journal_lines
 WHERE entry_id = $1
 ORDER BY line_no
@@ -461,6 +473,7 @@ func (q *Queries) ListEntryLines(ctx context.Context, entryID string) ([]Journal
 			&i.Memo,
 			&i.BranchID,
 			&i.Tags,
+			&i.CounterpartyID,
 		); err != nil {
 			return nil, err
 		}
@@ -473,7 +486,7 @@ func (q *Queries) ListEntryLines(ctx context.Context, entryID string) ([]Journal
 }
 
 const listLinesForEntries = `-- name: ListLinesForEntries :many
-SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
+SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags, counterparty_id
 FROM journal_lines
 WHERE entry_id = ANY($1::text[])
 ORDER BY entry_id, line_no
@@ -497,6 +510,7 @@ func (q *Queries) ListLinesForEntries(ctx context.Context, dollar_1 []string) ([
 			&i.Memo,
 			&i.BranchID,
 			&i.Tags,
+			&i.CounterpartyID,
 		); err != nil {
 			return nil, err
 		}

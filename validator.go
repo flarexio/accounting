@@ -105,6 +105,19 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 				errs = append(errs, fmt.Errorf("%s: branch %q is not a known reporting dimension", label, line.Dimensions.BranchID))
 			}
 		}
+
+		if cp := line.Dimensions.CounterpartyID; cp != "" {
+			c, ok, err := v.Repo.Counterparty(ctx, cp)
+			if err != nil {
+				return fmt.Errorf("accounting: load counterparty %q: %w", cp, err)
+			}
+			switch {
+			case !ok:
+				errs = append(errs, fmt.Errorf("%s: counterparty %q does not exist", label, cp))
+			case !c.Active:
+				errs = append(errs, fmt.Errorf("%s: counterparty %q is inactive and cannot be used", label, cp))
+			}
+		}
 	}
 
 	if len(intent.Lines) >= 2 && debits != credits {
@@ -112,13 +125,30 @@ func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 	}
 
 	branchSet := map[string]struct{}{}
+	cpSet := map[string]struct{}{}
 	for _, line := range intent.Lines {
 		if line.Dimensions.BranchID != "" {
 			branchSet[line.Dimensions.BranchID] = struct{}{}
 		}
+		if line.Dimensions.CounterpartyID != "" {
+			cpSet[line.Dimensions.CounterpartyID] = struct{}{}
+		}
 	}
 	if len(branchSet) > 1 {
 		errs = append(errs, fmt.Errorf("all lines must carry the same branch_id, got multiple values"))
+	}
+	if len(cpSet) > 1 {
+		errs = append(errs, fmt.Errorf("all lines must reference the same counterparty_id, got multiple values"))
+	}
+
+	if intent.Source != nil {
+		switch intent.Source.Kind {
+		case SourceInvoice, SourceBill, SourceReceipt:
+		case "":
+			errs = append(errs, errors.New("source.kind is required when a source document is set"))
+		default:
+			errs = append(errs, fmt.Errorf("source.kind %q is not a known document kind", intent.Source.Kind))
+		}
 	}
 
 	return errors.Join(errs...)

@@ -86,8 +86,10 @@ Integration event
 | Journal entry | `accounting.JournalEntry` | Posted immutable entry. `Date` is the business date (`accounting.Date`, `YYYY-MM-DD`); `PostedAt` is the UTC instant it was written. |
 | Journal line | `accounting.JournalLine` | One debit or credit; amount is stored in minor currency units. |
 | Branch dimension | `accounting.Dimensions.BranchID` | Reporting tag on a line, not a separate ledger. Required on every line; single-location companies seed one called `main`. |
+| Counterparty | `accounting.Counterparty` | Customer/supplier master data. A line's optional `Dimensions.CounterpartyID` attributes it to one (lines that set it on an entry share one value); this drives AR/AP aging. Not a separate ledger and not stored state for "paid/unpaid". |
+| Source document | `accounting.SourceDoc` | Optional invoice/bill/receipt (kind + number) an entry records, held on `JournalEntry.Source` rather than a separate `Invoice` aggregate. |
 | Future dimensions | `accounting.Dimensions.Tags` | Open-ended tags for project, department, channel, or similar reporting dimensions. |
-| Journal relation | `accounting.JournalRelation` | Directional, typed link between two posted entries (e.g. a reversal pointing at its original). Append-only; composite identity `(from_entry, to_entry)`. |
+| Journal relation | `accounting.JournalRelation` | Directional, typed link between two posted entries (e.g. a reversal pointing at its original, or a receipt `settles` an invoice). Append-only; composite identity `(from_entry, to_entry)`. |
 
 Amounts use `int64` minor units so balance checks are exact and never depend on floating-point comparison.
 

@@ -97,6 +97,82 @@ func TestValidator_RejectsUnknownPeriod(t *testing.T) {
 	}
 }
 
+func TestValidator_Counterparty(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewAccountingRepository()
+	scenario, err := accounting.LoadScenarioFile("seed/aws_bill.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	if err := scenario.Seed(ctx, repo); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	for _, c := range []accounting.Counterparty{
+		{ID: "CP-0001", Name: "Acme", Kind: accounting.CounterpartyCustomer, Active: true},
+		{ID: "CP-0002", Name: "Beta", Kind: accounting.CounterpartyCustomer, Active: true},
+		{ID: "CP-0099", Name: "Old", Kind: accounting.CounterpartySupplier, Active: false},
+	} {
+		if err := repo.PutCounterparty(ctx, c); err != nil {
+			t.Fatalf("seed counterparty: %v", err)
+		}
+	}
+	v := accounting.Validator{Repo: repo}
+
+	t.Run("active counterparty passes", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Lines[0].Dimensions.CounterpartyID = "CP-0001"
+		if err := v.Validate(ctx, intent); err != nil {
+			t.Fatalf("expected pass, got %v", err)
+		}
+	})
+	t.Run("unknown counterparty rejected", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Lines[0].Dimensions.CounterpartyID = "CP-9999"
+		err := v.Validate(ctx, intent)
+		if err == nil || !strings.Contains(err.Error(), "does not exist") {
+			t.Fatalf("expected unknown-counterparty error, got %v", err)
+		}
+	})
+	t.Run("inactive counterparty rejected", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Lines[0].Dimensions.CounterpartyID = "CP-0099"
+		err := v.Validate(ctx, intent)
+		if err == nil || !strings.Contains(err.Error(), "inactive") {
+			t.Fatalf("expected inactive-counterparty error, got %v", err)
+		}
+	})
+	t.Run("two different counterparties rejected", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Lines[0].Dimensions.CounterpartyID = "CP-0001"
+		intent.Lines[1].Dimensions.CounterpartyID = "CP-0002"
+		err := v.Validate(ctx, intent)
+		if err == nil || !strings.Contains(err.Error(), "same counterparty_id") {
+			t.Fatalf("expected single-counterparty error, got %v", err)
+		}
+	})
+}
+
+func TestValidator_SourceKind(t *testing.T) {
+	repo := awsBillRepo(t)
+	v := accounting.Validator{Repo: repo}
+
+	t.Run("known kind passes", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Source = &accounting.SourceDoc{Kind: accounting.SourceInvoice, Number: "AB-12345678"}
+		if err := v.Validate(context.Background(), intent); err != nil {
+			t.Fatalf("expected pass, got %v", err)
+		}
+	})
+	t.Run("unknown kind rejected", func(t *testing.T) {
+		intent := balancedAWSIntent()
+		intent.Source = &accounting.SourceDoc{Kind: "memo"}
+		err := v.Validate(context.Background(), intent)
+		if err == nil || !strings.Contains(err.Error(), "not a known document kind") {
+			t.Fatalf("expected unknown-source-kind error, got %v", err)
+		}
+	})
+}
+
 func TestValidator_RejectsZeroDate(t *testing.T) {
 	repo := awsBillRepo(t)
 	intent := balancedAWSIntent()
