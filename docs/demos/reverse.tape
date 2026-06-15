@@ -18,9 +18,8 @@ Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
 Type "ledger tui" Enter
-Sleep 3s
-Enter
-Sleep 2s
+# No select screen — launches straight into the bookkeeper chat (first branch).
+Sleep 5s
 
 # Turn 1: reverse the wrong entry (mechanical mirror + a reverses relation).
 Type "JE-0001 金額打錯了，幫我沖掉。"

@@ -23,9 +23,8 @@ Show
 
 # 1. First session, no policy → the gift lands in 交際費 (6115).
 Type "ledger tui" Enter
-Sleep 3s
-Enter
-Sleep 2s
+# No select screen — launches straight into the bookkeeper chat (first branch).
+Sleep 5s
 Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現金付了 6,000。"
 Sleep 1s
 Enter
@@ -47,9 +46,8 @@ Sleep 2s
 
 # 3. Second session, same request → now 廣告費 (6108), and the memo cites the policy.
 Type "ledger tui" Enter
-Sleep 3s
-Enter
-Sleep 2s
+# No select screen — launches straight into the bookkeeper chat (first branch).
+Sleep 5s
 Type "5/18 台北總公司送了一盒中秋禮盒給長期合作的客戶，現金付了 6,000。"
 Sleep 1s
 Enter
