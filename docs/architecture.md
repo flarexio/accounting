@@ -147,11 +147,12 @@ Currency precision is deliberately not validated: both `3150` and `315000` are l
 | --- | --- | --- |
 | `PostJournal` | `post_journal` | Posts a balanced double-entry journal entry. |
 | `ReverseJournal` | `reverse_journal` | Creates a mirror-image reversal of an existing posted entry and links it back through a `JournalRelation` of type `reverses`; entry and relation are applied atomically. |
+| `SettleJournal` | `settle` | Records a payment that clears an invoice/bill: posts the receipt entry and a `JournalRelation` of type `settles` from the receipt to the invoice's JE-id, applied atomically — the same shape as `reverse_journal`. |
 | `ClosePeriod` | — (CLI, no LLM intent) | For each branch with revenue or expense activity in the period, posts one balanced closing entry that drains every contributing account into the company's Retained Earnings account, with one `JournalRelation` of type `closes` per contributing source entry. Then flips `Period.Status` to `closed`. A second invocation against an already-closed period is a no-op. |
 
 `bookkeeping.Intent` is the typed union emitted by the agent. `bookkeeping.Registry` maps each intent kind to a validate/execute handler. Adding a bookkeeping operation means adding a route to the registry and exposing it in the prompt's intent menu. `ClosePeriod` is deliberately not a `bookkeeping.Intent` — period-end closing is rule-driven, not judgment-driven, and is triggered by an external scheduler (a `crontab` entry or equivalent) invoking `ledger close --period <id>`.
 
-`ClosePeriod` is the first M:N consumer of `JournalRelation`: one closing entry references many original revenue/expense entries through `closes` relations, exercising the same shape reserved for future operations (settlement, adjustments) under different `type` discriminators.
+`ClosePeriod` is the first M:N consumer of `JournalRelation`: one closing entry references many original revenue/expense entries through `closes` relations. `SettleJournal` uses the same shape under the `settles` discriminator (payment → invoice); adjustments and other operations can follow without new machinery.
 
 ## Posting And Immutability
 

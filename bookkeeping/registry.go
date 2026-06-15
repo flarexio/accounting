@@ -25,6 +25,7 @@ type Registry struct {
 func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub Publisher, clock Clock, subject string) Registry {
 	post := PostJournal{Repo: repo, Publisher: pub, Clock: clock, Subject: subject}
 	reverse := ReverseJournal{Repo: repo, Publisher: pub, Clock: clock, Subject: subject}
+	settle := SettleJournal{Repo: repo, Publisher: pub, Clock: clock, Subject: subject}
 
 	return Registry{routes: map[IntentKind]intentRoute{
 		IntentPostJournal: {
@@ -53,6 +54,20 @@ func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub Publisher, clo
 					return accounting.JournalEntry{}, missingPayloadErr(IntentReverseJournal)
 				}
 				return reverse.Execute(ctx, *intent.Reverse)
+			},
+		},
+		IntentSettle: {
+			validate: func(ctx context.Context, intent Intent) error {
+				if intent.Settle == nil {
+					return missingPayloadErr(IntentSettle)
+				}
+				return settle.Validate(ctx, *intent.Settle)
+			},
+			execute: func(ctx context.Context, intent Intent) (accounting.JournalEntry, error) {
+				if intent.Settle == nil {
+					return accounting.JournalEntry{}, missingPayloadErr(IntentSettle)
+				}
+				return settle.Execute(ctx, *intent.Settle)
 			},
 		},
 		IntentReject: {
