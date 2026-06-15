@@ -26,6 +26,7 @@ var supportedSubjects = []string{
 	accounting.SubjectAccountAdded,
 	accounting.SubjectBranchAdded,
 	accounting.SubjectPeriodAdded,
+	accounting.SubjectCounterpartyAdded,
 	accounting.SubjectPolicySet,
 }
 
@@ -147,7 +148,7 @@ func encodeEvent(evt bookkeeping.Event) ([]byte, error) {
 	case accounting.JournalPosted, accounting.PeriodClosure,
 		accounting.CompanyConfigured, accounting.AccountAdded,
 		accounting.BranchAdded, accounting.PeriodAdded,
-		accounting.PolicySet:
+		accounting.CounterpartyAdded, accounting.PolicySet:
 		body, err := json.Marshal(evt)
 		if err != nil {
 			return nil, fmt.Errorf("nats: marshal %s: %w", evt.EventSubject(), err)
@@ -162,8 +163,14 @@ func encodeEvent(evt bookkeeping.Event) ([]byte, error) {
 // concrete type by the message's subject. The transport sequence is not carried
 // on the event; the dispatch reads it from the message metadata into EventMeta.
 func decodeMsg(msg jetstream.Msg) (bookkeeping.Event, error) {
-	body := msg.Data()
-	switch subject := msg.Subject(); subject {
+	return decodeBySubject(msg.Subject(), msg.Data())
+}
+
+// decodeBySubject picks the concrete event type for subject and decodes body
+// into it. Kept separate from decodeMsg so the subject<->type table is testable
+// without a jetstream.Msg.
+func decodeBySubject(subject string, body []byte) (bookkeeping.Event, error) {
+	switch subject {
 	case accounting.SubjectJournalPosted:
 		return decodeBody[accounting.JournalPosted](body)
 	case accounting.SubjectPeriodClosure:
@@ -176,6 +183,8 @@ func decodeMsg(msg jetstream.Msg) (bookkeeping.Event, error) {
 		return decodeBody[accounting.BranchAdded](body)
 	case accounting.SubjectPeriodAdded:
 		return decodeBody[accounting.PeriodAdded](body)
+	case accounting.SubjectCounterpartyAdded:
+		return decodeBody[accounting.CounterpartyAdded](body)
 	case accounting.SubjectPolicySet:
 		return decodeBody[accounting.PolicySet](body)
 	default:
