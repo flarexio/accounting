@@ -49,6 +49,9 @@ type model struct {
 	options []Option // one per branch; the active one drives the session
 	current int      // index into options of the active branch
 
+	picking bool // the /branch picker overlay is open
+	cursor  int  // highlighted option while picking
+
 	session Session
 	label   string
 
@@ -150,6 +153,9 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.session == nil {
 		return m, nil // still connecting; only quit keys act
 	}
+	if m.picking {
+		return m.handlePickerKey(msg)
+	}
 
 	switch msg.String() {
 	case "esc":
@@ -192,6 +198,32 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
+	}
+	return m, nil
+}
+
+// handlePickerKey drives the /branch picker overlay: move, switch on enter,
+// cancel on esc.
+func (m model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.options)-1 {
+			m.cursor++
+		}
+	case "esc":
+		m.picking = false // cancel, back to chat unchanged
+	case "enter":
+		m.picking = false
+		if m.cursor != m.current {
+			m.current = m.cursor
+			_ = m.session.Close()
+			m.session = nil
+			return m, m.startSession(m.options[m.cursor])
+		}
 	}
 	return m, nil
 }
@@ -426,12 +458,47 @@ func (m model) View() tea.View {
 			footerStyle.Render("ctrl+c quit")
 	case m.session == nil:
 		content = "Connecting to ledger..."
+	case m.picking:
+		content = m.branchPickerView()
 	default:
 		content = m.chatView()
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+func (m model) branchPickerView() string {
+	var b strings.Builder
+	b.WriteString(headerStyle.Render("Switch branch"))
+	b.WriteString("\n")
+	b.WriteString(divider(min(m.width, 60)))
+	b.WriteString("\n\n")
+	for i, opt := range m.options {
+		marker := "  "
+		label := opt.Label
+		if i == m.cursor {
+			marker = keyStyle.Render("❯ ")
+			label = headerStyle.Render(label)
+		}
+		b.WriteString(marker)
+		b.WriteString(label)
+		if opt.Hint != "" {
+			b.WriteString("  ")
+			b.WriteString(hintStyle.Render(opt.Hint))
+		}
+		if i == m.current {
+			b.WriteString(systemStyle.Render("  (current)"))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(keyHints(
+		[2]string{"↑/↓", "move"},
+		[2]string{"enter", "switch"},
+		[2]string{"esc", "cancel"},
+	))
+	return b.String()
 }
 
 func (m model) chatView() string {

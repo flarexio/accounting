@@ -17,7 +17,7 @@ type command struct {
 // commands is the slash-command registry. Add a row plus a case in
 // handleCommand to expose a new command.
 var commands = []command{
-	{name: "branch", usage: "/branch [id]", desc: "switch the working branch; no id lists branches"},
+	{name: "branch", usage: "/branch [id]", desc: "switch branch by id, or open a picker with no id"},
 	{name: "help", usage: "/help", desc: "show this help"},
 }
 
@@ -42,11 +42,16 @@ func (m model) handleCommand(input string) (tea.Model, tea.Cmd) {
 	}
 }
 
-// cmdBranch switches the active branch, rebuilding the session for it; with no
-// argument it lists the branches.
+// cmdBranch switches the active branch, rebuilding the session for it. With an
+// id it switches directly (CLI style); with no id it opens the picker overlay.
 func (m model) cmdBranch(args []string) (tea.Model, tea.Cmd) {
 	if len(args) == 0 {
-		m.appendLine(line{kind: lineSystem, text: m.branchList()})
+		if len(m.options) == 1 {
+			m.appendLine(line{kind: lineSystem, text: fmt.Sprintf("only one branch: %s (%s)", m.options[0].Label, m.options[0].Hint)})
+			return m, nil
+		}
+		m.picking = true
+		m.cursor = m.current
 		return m, nil
 	}
 	id := args[0]

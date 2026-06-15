@@ -27,8 +27,8 @@ ledger tui
 |------|----------|
 | 啟動 | 短暫 `Connecting to ledger...` 後直接進 chat,header 顯示目前分公司名 |
 | 輸入 `/help` | 系統行列出可用指令(`/branch`、`/help`)|
-| 輸入 `/branch` | 系統行列出所有分公司,目前所在的標 `*` |
-| 輸入 `/branch tc` | 切換到台中營業所:**重建 session**(對話清空)、header 改成台中營業所 |
+| 輸入 `/branch`（無參數） | 開啟**可選清單**:`↑`/`↓` 移動、`Enter` 切換、`Esc` 取消(目前分公司標 `(current)`)|
+| 輸入 `/branch tc` | 直接切換到台中營業所(CLI 式):**重建 session**(對話清空)、header 改成台中營業所 |
 | 輸入 `/branch zz` | 系統行顯示「unknown branch」+ 分公司清單,不切換 |
 | 輸入 `/不存在` | 系統行顯示「unknown command — type /help」,不送 agent |
 | `ctrl+c` / `ctrl+d` | 程式結束(唯一結束方式)|

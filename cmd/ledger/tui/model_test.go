@@ -265,20 +265,67 @@ func TestModelBranchCommandSwitchesSession(t *testing.T) {
 	}
 }
 
-func TestModelBranchCommandUnknownAndList(t *testing.T) {
+func TestModelBranchCommandUnknownId(t *testing.T) {
 	m, _, _ := twoBranchModel(t)
 
 	m, cmd := submitInput(t, m, "/branch zz")
 	if cmd != nil {
 		t.Fatal("an unknown branch should not switch session")
 	}
+	if m.picking {
+		t.Fatal("an unknown branch id should not open the picker")
+	}
 	if last := m.lines[len(m.lines)-1]; last.kind != lineSystem || !strings.Contains(last.text, "unknown branch") {
 		t.Errorf("expected an unknown-branch system note, got %+v", last)
 	}
+}
+
+func TestModelBranchPickerSwitches(t *testing.T) {
+	m, hq, tc := twoBranchModel(t)
+
+	// /branch with no id opens the picker on the current branch.
+	m, cmd := submitInput(t, m, "/branch")
+	if cmd != nil || !m.picking || m.cursor != 0 {
+		t.Fatalf("/branch should open the picker at current; picking=%v cursor=%d", m.picking, m.cursor)
+	}
+	if m.View().Content == "" {
+		t.Error("picker view should render")
+	}
+
+	// move down to tc, enter to switch.
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(model)
+	next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(model)
+	if m.picking {
+		t.Fatal("enter should close the picker")
+	}
+	if m.current != 1 || !hq.closed {
+		t.Fatalf("enter should switch to tc and close hq: current=%d hqClosed=%v", m.current, hq.closed)
+	}
+	ready := cmd().(sessionReadyMsg)
+	next, _ = m.Update(ready)
+	if next.(model).session != tc {
+		t.Error("session should be the tc branch after switching")
+	}
+}
+
+func TestModelBranchPickerCancel(t *testing.T) {
+	m, hq, _ := twoBranchModel(t)
 
 	m, _ = submitInput(t, m, "/branch")
-	if last := m.lines[len(m.lines)-1]; !strings.Contains(last.text, "hq") || !strings.Contains(last.text, "tc") {
-		t.Errorf("/branch with no id should list branches, got %q", last.text)
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown}) // move, but cancel
+	m = next.(model)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(model)
+	if m.picking {
+		t.Fatal("esc should close the picker")
+	}
+	if cmd != nil {
+		t.Fatal("cancelling the picker should not switch session")
+	}
+	if m.current != 0 || hq.closed {
+		t.Fatal("cancel must leave the current branch and its session untouched")
 	}
 }
 
