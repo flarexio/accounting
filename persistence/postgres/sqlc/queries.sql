@@ -51,6 +51,27 @@ ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     position = EXCLUDED.position;
 
+-- name: GetCounterparty :one
+SELECT id, name, kind, tax_id, active, aliases, description
+FROM counterparties
+WHERE id = $1;
+
+-- name: ListCounterparties :many
+SELECT id, name, kind, tax_id, active, aliases, description
+FROM counterparties
+ORDER BY id;
+
+-- name: UpsertCounterparty :exec
+INSERT INTO counterparties (id, name, kind, tax_id, active, aliases, description)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    kind = EXCLUDED.kind,
+    tax_id = EXCLUDED.tax_id,
+    active = EXCLUDED.active,
+    aliases = EXCLUDED.aliases,
+    description = EXCLUDED.description;
+
 -- name: GetPeriod :one
 SELECT id, start_on, end_on, status
 FROM periods

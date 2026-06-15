@@ -4,6 +4,7 @@ sql:
     queries: sqlc/queries.sql
     schema:
       - migrations/0001_schema.up.sql
+      - migrations/0003_counterparties.up.sql
     gen:
       go:
         package: pgstore

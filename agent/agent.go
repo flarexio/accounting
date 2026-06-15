@@ -125,11 +125,13 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	}, err
 }
 
-// toolsFor exposes find_accounts plus, when a recent-entries buffer is present,
-// the recall tools (recent_entries, get_entry). repo is the staging view so
-// get_entry also resolves staged-but-uncommitted entries.
+// toolsFor exposes find_accounts and find_counterparties plus, when a
+// recent-entries buffer is present, the recall tools (recent_entries,
+// get_entry). repo is the staging view so get_entry also resolves
+// staged-but-uncommitted entries.
 func (a Bookkeeper) toolsFor(repo accounting.LedgerRepository) map[string]loop.Tool {
 	tools := accountTools(repo)
+	maps.Copy(tools, counterpartyTools(repo))
 	if a.Recent != nil {
 		maps.Copy(tools, recallTools(repo, a.Recent))
 	}

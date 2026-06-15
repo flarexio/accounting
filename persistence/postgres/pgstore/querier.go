@@ -12,6 +12,7 @@ type Querier interface {
 	CountEntries(ctx context.Context) (int64, error)
 	GetAccount(ctx context.Context, code string) (Account, error)
 	GetBranch(ctx context.Context, id string) (Branch, error)
+	GetCounterparty(ctx context.Context, id string) (Counterparty, error)
 	GetEntry(ctx context.Context, id string) (JournalEntry, error)
 	GetLastSequence(ctx context.Context, subject string) (int64, error)
 	GetPeriod(ctx context.Context, id string) (Period, error)
@@ -32,6 +33,7 @@ type Querier interface {
 	// LIMIT 2 so the Go caller can defensively detect the >1 row invariant
 	// violation that the domain singleton rule forbids.
 	ListCompanies(ctx context.Context) ([]Company, error)
+	ListCounterparties(ctx context.Context) ([]Counterparty, error)
 	ListEntries(ctx context.Context) ([]JournalEntry, error)
 	ListEntriesByPeriod(ctx context.Context, periodID string) ([]JournalEntry, error)
 	ListEntryLines(ctx context.Context, entryID string) ([]JournalLine, error)
@@ -46,6 +48,7 @@ type Querier interface {
 	UpsertBranch(ctx context.Context, arg UpsertBranchParams) error
 	// Omits policy on purpose: SetPolicy owns that column, so a re-seed can't clobber it.
 	UpsertCompany(ctx context.Context, arg UpsertCompanyParams) error
+	UpsertCounterparty(ctx context.Context, arg UpsertCounterpartyParams) error
 	UpsertLastSequence(ctx context.Context, arg UpsertLastSequenceParams) error
 	UpsertPeriod(ctx context.Context, arg UpsertPeriodParams) error
 }

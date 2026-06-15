@@ -18,16 +18,17 @@ import (
 // exported so callers that need its non-interface methods (e.g. ClearJournals
 // in benchmarks) can hold the concrete pointer.
 type Repository struct {
-	mu        sync.RWMutex
-	company   *accounting.Company
-	accounts  map[string]accounting.Account
-	branches  map[string]accounting.Branch
-	periods   map[string]accounting.Period
-	entries   []accounting.JournalEntry
-	entryIdx  map[string]int
-	lastSeq   map[string]uint64
-	relations []accounting.JournalRelation
-	searcher  accounting.AccountSearcher
+	mu             sync.RWMutex
+	company        *accounting.Company
+	accounts       map[string]accounting.Account
+	branches       map[string]accounting.Branch
+	periods        map[string]accounting.Period
+	counterparties map[string]accounting.Counterparty
+	entries        []accounting.JournalEntry
+	entryIdx       map[string]int
+	lastSeq        map[string]uint64
+	relations      []accounting.JournalRelation
+	searcher       accounting.AccountSearcher
 }
 
 // Option configures an in-memory repository at construction time.
@@ -44,11 +45,12 @@ func WithSearcher(s accounting.AccountSearcher) Option {
 // state between runs.
 func NewAccountingRepository(opts ...Option) *Repository {
 	r := &Repository{
-		accounts: make(map[string]accounting.Account),
-		branches: make(map[string]accounting.Branch),
-		periods:  make(map[string]accounting.Period),
-		entryIdx: make(map[string]int),
-		lastSeq:  make(map[string]uint64),
+		accounts:       make(map[string]accounting.Account),
+		branches:       make(map[string]accounting.Branch),
+		periods:        make(map[string]accounting.Period),
+		counterparties: make(map[string]accounting.Counterparty),
+		entryIdx:       make(map[string]int),
+		lastSeq:        make(map[string]uint64),
 	}
 	for _, o := range opts {
 		o(r)
@@ -77,6 +79,13 @@ func (r *Repository) Branch(_ context.Context, id string) (accounting.Branch, bo
 	defer r.mu.RUnlock()
 	b, ok := r.branches[id]
 	return b, ok, nil
+}
+
+func (r *Repository) Counterparty(_ context.Context, id string) (accounting.Counterparty, bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c, ok := r.counterparties[id]
+	return cloneCounterparty(c), ok, nil
 }
 
 func (r *Repository) Entry(_ context.Context, id string) (accounting.JournalEntry, bool, error) {
@@ -199,6 +208,17 @@ func (r *Repository) Branches(_ context.Context) ([]accounting.Branch, error) {
 	return out, nil
 }
 
+func (r *Repository) Counterparties(_ context.Context) ([]accounting.Counterparty, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]accounting.Counterparty, 0, len(r.counterparties))
+	for _, c := range r.counterparties {
+		out = append(out, cloneCounterparty(c))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
 func (r *Repository) Entries(_ context.Context) ([]accounting.JournalEntry, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -295,6 +315,13 @@ func (r *Repository) PutBranch(_ context.Context, b accounting.Branch) error {
 	return nil
 }
 
+func (r *Repository) PutCounterparty(_ context.Context, c accounting.Counterparty) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.counterparties[c.ID] = cloneCounterparty(c)
+	return nil
+}
+
 // AppendEntry writes the entry and its relations under one mutex, advancing
 // LastSequence from any EventMeta in the context.
 func (r *Repository) AppendEntry(ctx context.Context, entry accounting.JournalEntry, relations []accounting.JournalRelation) error {
@@ -379,6 +406,14 @@ func (r *Repository) LastSequence(_ context.Context, subject string) (uint64, er
 func cloneAccountingEntry(e accounting.JournalEntry) accounting.JournalEntry {
 	out := e
 	out.Lines = cloneAccountingLines(e.Lines)
+	return out
+}
+
+func cloneCounterparty(c accounting.Counterparty) accounting.Counterparty {
+	out := c
+	if c.Aliases != nil {
+		out.Aliases = append([]string(nil), c.Aliases...)
+	}
 	return out
 }
 

@@ -67,7 +67,8 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 		On(accounting.SubjectPolicySet, &bookkeeping.ApplyPolicy{Repo: repo}).
 		On(accounting.SubjectAccountAdded, &bookkeeping.ApplyAccount{Repo: repo}).
 		On(accounting.SubjectBranchAdded, &bookkeeping.ApplyBranch{Repo: repo}).
-		On(accounting.SubjectPeriodAdded, &bookkeeping.ApplyPeriod{Repo: repo})
+		On(accounting.SubjectPeriodAdded, &bookkeeping.ApplyPeriod{Repo: repo}).
+		On(accounting.SubjectCounterpartyAdded, &bookkeeping.ApplyCounterparty{Repo: repo})
 	if err := bus.Subscribe(router); err != nil {
 		_ = bus.Close()
 		return nil, fmt.Errorf("book-run: subscribe: %w", err)

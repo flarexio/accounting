@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/flarexio/accounting"
@@ -47,6 +48,44 @@ func accountTools(repo accounting.LedgerRepository) map[string]loop.Tool {
 				ArgsSchema:  json.RawMessage(findAccountsArgsSchema),
 			},
 			Handler: findAccountsHandler(repo),
+		},
+	}
+}
+
+const toolFindCounterparties = "find_counterparties"
+
+type findCounterpartiesArgs struct {
+	Query string `json:"query"`
+	Kind  string `json:"kind"`
+}
+
+// findCounterpartiesArgsSchema is the strict-mode schema for find_counterparties.
+// Both args are required; kind may be the empty string to skip the filter.
+const findCounterpartiesArgsSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["query", "kind"],
+  "properties": {
+    "query": { "type": "string", "description": "Name, alias, or tax id of the customer or supplier, e.g. \"TSMC\" or \"22099131\"." },
+    "kind": {
+      "type": "string",
+      "description": "Restrict to customers or suppliers; empty string means either.",
+      "enum": ["", "customer", "supplier"]
+    }
+  }
+}`
+
+// counterpartyTools returns the find_counterparties tool: it resolves a
+// customer/supplier the user named to its CP-id so a posting can reference it.
+func counterpartyTools(repo accounting.LedgerRepository) map[string]loop.Tool {
+	return map[string]loop.Tool{
+		toolFindCounterparties: {
+			Spec: llm.ToolSpec{
+				Name:        toolFindCounterparties,
+				Description: "Look up a customer or supplier by name, alias, or tax id. Active matches are listed best match first; inactive ones are listed separately and must not be referenced by a new posting.",
+				ArgsSchema:  json.RawMessage(findCounterpartiesArgsSchema),
+			},
+			Handler: findCounterpartiesHandler(repo),
 		},
 	}
 }
@@ -176,6 +215,97 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 			return "", err
 		}
 		return formatAccountMatches(matches), nil
+	}
+}
+
+// findCounterpartiesHandler answers a find_counterparties call by lexically
+// ranking the chart of counterparties. The list is small, so it loads all and
+// ranks in memory rather than pushing the search to the adapter.
+func findCounterpartiesHandler(repo accounting.LedgerRepository) loop.ToolHandler {
+	return func(ctx context.Context, args json.RawMessage) (string, error) {
+		var p findCounterpartiesArgs
+		if len(args) > 0 {
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("invalid find_counterparties args: %w", err)
+			}
+		}
+		all, err := repo.Counterparties(ctx)
+		if err != nil {
+			return "", err
+		}
+		kind := accounting.CounterpartyKind(strings.TrimSpace(p.Kind))
+		type scored struct {
+			cp   accounting.Counterparty
+			tier int
+		}
+		var matched []scored
+		for _, c := range all {
+			if !counterpartyKindMatches(kind, c.Kind) {
+				continue
+			}
+			if tier, ok := accounting.CounterpartyMatch(p.Query, c); ok {
+				matched = append(matched, scored{c, tier})
+			}
+		}
+		sort.SliceStable(matched, func(i, j int) bool {
+			if matched[i].tier != matched[j].tier {
+				return matched[i].tier < matched[j].tier
+			}
+			return matched[i].cp.ID < matched[j].cp.ID
+		})
+		out := make([]accounting.Counterparty, len(matched))
+		for i, m := range matched {
+			out[i] = m.cp
+		}
+		return formatCounterpartyMatches(out), nil
+	}
+}
+
+// counterpartyKindMatches reports whether a counterparty of kind cp satisfies a
+// query filter; an empty filter matches anything and "both" matches either side.
+func counterpartyKindMatches(filter, cp accounting.CounterpartyKind) bool {
+	if filter == "" || cp == accounting.CounterpartyBoth {
+		return true
+	}
+	return filter == cp
+}
+
+// formatCounterpartyMatches renders active matches as the referenceable
+// candidates and lists any inactive ones separately as disabled.
+func formatCounterpartyMatches(cps []accounting.Counterparty) string {
+	var active, inactive []accounting.Counterparty
+	for _, c := range cps {
+		if c.Active {
+			active = append(active, c)
+		} else {
+			inactive = append(inactive, c)
+		}
+	}
+	if len(active) == 0 && len(inactive) == 0 {
+		return "No counterparties match. Try the name, an alias, or the tax id."
+	}
+	var b strings.Builder
+	if len(active) > 0 {
+		fmt.Fprintf(&b, "%d matching counterparty(ies):", len(active))
+		for _, c := range active {
+			writeCounterparty(&b, c)
+		}
+	} else {
+		b.WriteString("No active counterparties match.")
+	}
+	if len(inactive) > 0 {
+		fmt.Fprintf(&b, "\n\n%d inactive counterparty(ies) matched -- disabled, must not be referenced in a posting:", len(inactive))
+		for _, c := range inactive {
+			writeCounterparty(&b, c)
+		}
+	}
+	return b.String()
+}
+
+func writeCounterparty(b *strings.Builder, c accounting.Counterparty) {
+	fmt.Fprintf(b, "\n  - %s %s (%s)", c.ID, c.Name, c.Kind)
+	if c.TaxID != "" {
+		fmt.Fprintf(b, " TaxID %s", c.TaxID)
 	}
 }
 

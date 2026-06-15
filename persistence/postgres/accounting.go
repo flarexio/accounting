@@ -117,6 +117,17 @@ func (r *accountingRepository) Branch(ctx context.Context, id string) (accountin
 	return branchFromRow(row), true, nil
 }
 
+func (r *accountingRepository) Counterparty(ctx context.Context, id string) (accounting.Counterparty, bool, error) {
+	row, err := r.q.GetCounterparty(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return accounting.Counterparty{}, false, nil
+		}
+		return accounting.Counterparty{}, false, fmt.Errorf("postgres: GetCounterparty: %w", err)
+	}
+	return counterpartyFromRow(row), true, nil
+}
+
 func (r *accountingRepository) Entry(ctx context.Context, id string) (accounting.JournalEntry, bool, error) {
 	row, err := r.q.GetEntry(ctx, id)
 	if err != nil {
@@ -296,6 +307,18 @@ func (r *accountingRepository) Branches(ctx context.Context) ([]accounting.Branc
 	return out, nil
 }
 
+func (r *accountingRepository) Counterparties(ctx context.Context) ([]accounting.Counterparty, error) {
+	rows, err := r.q.ListCounterparties(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: ListCounterparties: %w", err)
+	}
+	out := make([]accounting.Counterparty, len(rows))
+	for i, row := range rows {
+		out[i] = counterpartyFromRow(row)
+	}
+	return out, nil
+}
+
 // Entries returns every posted entry sorted by sequence, each with its lines
 // populated -- one query for entries, one for all their lines, stitched in memory.
 func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
@@ -426,6 +449,21 @@ func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branc
 		Position: int32(b.Position),
 	}); err != nil {
 		return fmt.Errorf("postgres: UpsertBranch: %w", err)
+	}
+	return nil
+}
+
+func (r *accountingRepository) PutCounterparty(ctx context.Context, c accounting.Counterparty) error {
+	if err := r.q.UpsertCounterparty(ctx, pgstore.UpsertCounterpartyParams{
+		ID:          c.ID,
+		Name:        c.Name,
+		Kind:        string(c.Kind),
+		TaxID:       c.TaxID,
+		Active:      c.Active,
+		Aliases:     c.Aliases,
+		Description: c.Description,
+	}); err != nil {
+		return fmt.Errorf("postgres: UpsertCounterparty: %w", err)
 	}
 	return nil
 }
@@ -600,6 +638,18 @@ func accountFromRow(row pgstore.Account) accounting.Account {
 
 func branchFromRow(row pgstore.Branch) accounting.Branch {
 	return accounting.Branch{ID: row.ID, Name: row.Name, Position: int(row.Position)}
+}
+
+func counterpartyFromRow(row pgstore.Counterparty) accounting.Counterparty {
+	return accounting.Counterparty{
+		ID:          row.ID,
+		Name:        row.Name,
+		Kind:        accounting.CounterpartyKind(row.Kind),
+		TaxID:       row.TaxID,
+		Active:      row.Active,
+		Aliases:     row.Aliases,
+		Description: row.Description,
+	}
 }
 
 func periodFromRow(row pgstore.Period) accounting.Period {
