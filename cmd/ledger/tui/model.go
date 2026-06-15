@@ -453,7 +453,7 @@ func (m model) View() tea.View {
 		content = "Starting accounting TUI..."
 	case m.err != nil:
 		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
-			footerStyle.Render("ctrl+c/ctrl+d quit")
+			footerStyle.Render("ctrl+c quit")
 	case m.state == stateSelect && len(m.options) == 1:
 		content = "Connecting to ledger..."
 	case m.state == stateSelect:
@@ -491,7 +491,7 @@ func (m model) selectView() string {
 	b.WriteString(keyHints(
 		[2]string{"↑/↓", "move"},
 		[2]string{"enter", "start"},
-		[2]string{"ctrl+c/ctrl+d", "quit"},
+		[2]string{"ctrl+c", "quit"},
 	))
 	return b.String()
 }
@@ -511,10 +511,10 @@ func (m model) chatView() string {
 		[2]string{"enter", "send"},
 		[2]string{"↑/↓ pgup/pgdn", "scroll"},
 		[2]string{"esc", "back"},
-		[2]string{"ctrl+c/ctrl+d", "quit"},
+		[2]string{"ctrl+c", "quit"},
 	)
 	if m.running {
-		footer = keyHints([2]string{"esc", "cancel turn"}, [2]string{"ctrl+c/ctrl+d", "quit"})
+		footer = keyHints([2]string{"esc", "cancel turn"}, [2]string{"ctrl+c", "quit"})
 	}
 
 	return strings.Join([]string{
