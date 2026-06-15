@@ -40,24 +40,27 @@ type Counterparty struct {
 }
 
 type JournalEntry struct {
-	ID          string
-	Sequence    int64
-	EntryDate   pgtype.Date
-	PeriodID    string
-	Currency    string
-	Description string
-	PostedAt    pgtype.Timestamptz
+	ID           string
+	Sequence     int64
+	EntryDate    pgtype.Date
+	PeriodID     string
+	Currency     string
+	Description  string
+	PostedAt     pgtype.Timestamptz
+	SourceKind   string
+	SourceNumber string
 }
 
 type JournalLine struct {
-	EntryID     string
-	LineNo      int32
-	AccountCode string
-	Side        string
-	Amount      int64
-	Memo        string
-	BranchID    string
-	Tags        []byte
+	EntryID        string
+	LineNo         int32
+	AccountCode    string
+	Side           string
+	Amount         int64
+	Memo           string
+	BranchID       string
+	Tags           []byte
+	CounterpartyID string
 }
 
 type JournalRelation struct {

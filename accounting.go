@@ -91,10 +91,13 @@ type Period struct {
 	Status PeriodStatus `json:"status" yaml:"status"`
 }
 
-// Dimensions tag a journal line with reporting cuts.
+// Dimensions tag a journal line with reporting cuts. As with BranchID, every
+// line on one entry shares CounterpartyID; it is empty for lines with no
+// customer/supplier (cash, tax, internal accounts), and drives AR/AP attribution.
 type Dimensions struct {
-	BranchID string            `json:"branch_id,omitempty"`
-	Tags     map[string]string `json:"tags,omitempty"`
+	BranchID       string            `json:"branch_id,omitempty"`
+	CounterpartyID string            `json:"counterparty_id,omitempty"`
+	Tags           map[string]string `json:"tags,omitempty"`
 }
 
 // JournalLine is one debit or credit on a journal entry. Amount is in minor
@@ -107,14 +110,33 @@ type JournalLine struct {
 	Dimensions  Dimensions `json:"dimensions"`
 }
 
+// SourceDocKind classifies the business document a JournalEntry records.
+type SourceDocKind string
+
+const (
+	SourceInvoice SourceDocKind = "invoice" // sales/AR invoice you issued
+	SourceBill    SourceDocKind = "bill"    // purchase/AP bill a supplier issued
+	SourceReceipt SourceDocKind = "receipt" // payment receipt
+)
+
+// SourceDoc is the business document an entry records, kept beside the journal
+// rather than as a separate aggregate. Number is the invoice/receipt number
+// (e.g. 統一發票 AB-12345678) used for search and duplicate detection.
+type SourceDoc struct {
+	Kind   SourceDocKind `json:"kind"`
+	Number string        `json:"number,omitempty"`
+}
+
 // JournalIntent is a proposed transaction; it must clear Validator before
-// posting. Date is the business date in the company's timezone.
+// posting. Date is the business date in the company's timezone. Source is the
+// optional invoice/receipt the entry records.
 type JournalIntent struct {
 	Date        Date          `json:"date"`
 	PeriodID    string        `json:"period_id"`
 	Currency    string        `json:"currency"`
 	Description string        `json:"description"`
 	Lines       []JournalLine `json:"lines"`
+	Source      *SourceDoc    `json:"source,omitempty"`
 }
 
 // JournalEntry is a posted, sealed accounting entry. Entries are immutable;
@@ -128,6 +150,7 @@ type JournalEntry struct {
 	Description string        `json:"description"`
 	Lines       []JournalLine `json:"lines"`
 	PostedAt    time.Time     `json:"posted_at"`
+	Source      *SourceDoc    `json:"source,omitempty"`
 }
 
 // JournalRelationType classifies a JournalRelation; new kinds are added when

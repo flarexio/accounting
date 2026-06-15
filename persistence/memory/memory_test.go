@@ -51,6 +51,32 @@ func TestRepository_ApplyAndRead(t *testing.T) {
 	}
 }
 
+func TestRepository_PreservesSourceAndCounterparty(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewAccountingRepository()
+	evt := sampleEntry("JE-0001")
+	evt.Entry.Source = &accounting.SourceDoc{Kind: accounting.SourceInvoice, Number: "AB-12345678"}
+	evt.Entry.Lines[0].Dimensions.CounterpartyID = "CP-0001"
+	if err := apply(ctx, repo, 1, evt); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	got, _, _ := repo.Entry(ctx, "JE-0001")
+	if got.Source == nil || got.Source.Kind != accounting.SourceInvoice || got.Source.Number != "AB-12345678" {
+		t.Fatalf("source not preserved: %+v", got.Source)
+	}
+	if got.Lines[0].Dimensions.CounterpartyID != "CP-0001" {
+		t.Fatalf("counterparty_id not preserved: %+v", got.Lines[0].Dimensions)
+	}
+
+	// Mutating the returned Source must not affect stored state (deep clone).
+	got.Source.Number = "tampered"
+	stored, _, _ := repo.Entry(ctx, "JE-0001")
+	if stored.Source.Number != "AB-12345678" {
+		t.Fatalf("stored source mutated through returned value: %+v", stored.Source)
+	}
+}
+
 func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewAccountingRepository()

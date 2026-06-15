@@ -53,7 +53,7 @@ type IntentDescriptor struct {
 }
 
 const (
-	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}`
+	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","source":null,"lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":"<CP-id or empty>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":""}}]}`
 
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"<amount_error|account_error|duplicate|customer_cancel|period_end|other>","note":"..."}`
 
@@ -111,12 +111,27 @@ const intentSchemaJSON = `{
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["date", "period_id", "currency", "description", "lines"],
+          "required": ["date", "period_id", "currency", "description", "lines", "source"],
           "properties": {
             "date": { "type": "string", "description": "Business date in the company's timezone, format YYYY-MM-DD (e.g. 2026-05-12), inside the chosen period" },
             "period_id": { "type": "string" },
             "currency": { "type": "string", "description": "ISO 4217 code (USD, TWD, ...)" },
             "description": { "type": "string" },
+            "source": {
+              "anyOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["kind", "number"],
+                  "properties": {
+                    "kind": { "type": "string", "enum": ["invoice", "bill", "receipt"], "description": "invoice = a sales invoice you issued; bill = a purchase invoice a supplier issued; receipt = a payment receipt." },
+                    "number": { "type": "string", "description": "The document number (e.g. 統一發票 AB-12345678), or empty string if none." }
+                  }
+                }
+              ],
+              "description": "The invoice/receipt this entry records, or null for entries with no source document."
+            },
             "lines": {
               "type": "array",
               "description": "At least two lines; total debit must equal total credit.",
@@ -132,9 +147,10 @@ const intentSchemaJSON = `{
                   "dimensions": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["branch_id"],
+                    "required": ["branch_id", "counterparty_id"],
                     "properties": {
-                      "branch_id": { "type": "string", "description": "Required reporting branch this line is posted to; must come from the periods/branches list. All lines on one entry share the same branch_id." }
+                      "branch_id": { "type": "string", "description": "Required reporting branch this line is posted to; must come from the periods/branches list. All lines on one entry share the same branch_id." },
+                      "counterparty_id": { "type": "string", "description": "Customer/supplier this line is attributed to, from find_counterparties (e.g. CP-0001); empty string for cash/tax/internal lines with no counterparty. All lines that set it on one entry must share the same value. Set it on the receivable/payable line of an AR/AP transaction." }
                     }
                   }
                 }

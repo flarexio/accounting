@@ -512,14 +512,21 @@ func (r *accountingRepository) AppendEntry(ctx context.Context, entry accounting
 }
 
 func insertEntryParams(entry accounting.JournalEntry, meta accounting.EventMeta) pgstore.InsertEntryParams {
+	var srcKind, srcNumber string
+	if entry.Source != nil {
+		srcKind = string(entry.Source.Kind)
+		srcNumber = entry.Source.Number
+	}
 	return pgstore.InsertEntryParams{
-		ID:          entry.ID,
-		Sequence:    int64(meta.Sequence),
-		EntryDate:   pgtype.Date{Time: entry.Date.Time(time.UTC), Valid: true},
-		PeriodID:    entry.PeriodID,
-		Currency:    entry.Currency,
-		Description: entry.Description,
-		PostedAt:    pgtype.Timestamptz{Time: entry.PostedAt, Valid: true},
+		ID:           entry.ID,
+		Sequence:     int64(meta.Sequence),
+		EntryDate:    pgtype.Date{Time: entry.Date.Time(time.UTC), Valid: true},
+		PeriodID:     entry.PeriodID,
+		Currency:     entry.Currency,
+		Description:  entry.Description,
+		PostedAt:     pgtype.Timestamptz{Time: entry.PostedAt, Valid: true},
+		SourceKind:   srcKind,
+		SourceNumber: srcNumber,
 	}
 }
 
@@ -529,14 +536,15 @@ func insertLineParams(entryID string, idx int, line accounting.JournalLine) (pgs
 		return pgstore.InsertLineParams{}, err
 	}
 	return pgstore.InsertLineParams{
-		EntryID:     entryID,
-		LineNo:      int32(idx),
-		AccountCode: line.AccountCode,
-		Side:        string(line.Side),
-		Amount:      line.Amount,
-		Memo:        line.Memo,
-		BranchID:    line.Dimensions.BranchID,
-		Tags:        tags,
+		EntryID:        entryID,
+		LineNo:         int32(idx),
+		AccountCode:    line.AccountCode,
+		Side:           string(line.Side),
+		Amount:         line.Amount,
+		Memo:           line.Memo,
+		BranchID:       line.Dimensions.BranchID,
+		CounterpartyID: line.Dimensions.CounterpartyID,
+		Tags:           tags,
 	}, nil
 }
 
@@ -662,7 +670,7 @@ func periodFromRow(row pgstore.Period) accounting.Period {
 }
 
 func entryFromRow(row pgstore.JournalEntry) accounting.JournalEntry {
-	return accounting.JournalEntry{
+	entry := accounting.JournalEntry{
 		ID:          row.ID,
 		Date:        accounting.DateOf(row.EntryDate.Time, time.UTC),
 		PeriodID:    row.PeriodID,
@@ -670,6 +678,13 @@ func entryFromRow(row pgstore.JournalEntry) accounting.JournalEntry {
 		Description: row.Description,
 		PostedAt:    row.PostedAt.Time,
 	}
+	if row.SourceKind != "" || row.SourceNumber != "" {
+		entry.Source = &accounting.SourceDoc{
+			Kind:   accounting.SourceDocKind(row.SourceKind),
+			Number: row.SourceNumber,
+		}
+	}
+	return entry
 }
 
 func linesFromRows(rows []pgstore.JournalLine) ([]accounting.JournalLine, error) {
@@ -688,8 +703,9 @@ func linesFromRows(rows []pgstore.JournalLine) ([]accounting.JournalLine, error)
 			Amount:      row.Amount,
 			Memo:        row.Memo,
 			Dimensions: accounting.Dimensions{
-				BranchID: row.BranchID,
-				Tags:     tags,
+				BranchID:       row.BranchID,
+				CounterpartyID: row.CounterpartyID,
+				Tags:           tags,
 			},
 		}
 	}

@@ -307,7 +307,8 @@ Behavior rules:
   - If validation feedback is present, fix only the named problems and resubmit.
   - If the user specifies a period that is not in the open periods list, use reject and state that the period is closed. Do not substitute a different period.
   - If the user explicitly asks to use an account shown as inactive (in the chart listing or by find_accounts), use reject and state that the account is disabled. Do not substitute a different account.
-  - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.`
+  - When the chart of accounts is summarized rather than listed, call the find_accounts tool to look up account_code values; do not invent codes.
+  - For a credit sale or purchase (accounts receivable/payable), resolve the customer or supplier with find_counterparties and set counterparty_id on the receivable/payable line; leave it empty on cash, tax, and internal lines. Record the invoice or receipt number in source when the request gives one. A plain cash transaction with no named party needs neither.`
 
 	systemPromptMultiActionRules = `
 Completing a request:

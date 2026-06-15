@@ -97,29 +97,29 @@ UPDATE periods SET status = $2 WHERE id = $1;
 SELECT count(*) FROM journal_entries;
 
 -- name: GetEntry :one
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 WHERE id = $1;
 
 -- name: ListEntries :many
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 ORDER BY sequence;
 
 -- name: ListEntriesByPeriod :many
-SELECT id, sequence, entry_date, period_id, currency, description, posted_at
+SELECT id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
 FROM journal_entries
 WHERE period_id = $1
 ORDER BY sequence;
 
 -- name: ListEntryLines :many
-SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
+SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags, counterparty_id
 FROM journal_lines
 WHERE entry_id = $1
 ORDER BY line_no;
 
 -- name: ListLinesForEntries :many
-SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags
+SELECT entry_id, line_no, account_code, side, amount, memo, branch_id, tags, counterparty_id
 FROM journal_lines
 WHERE entry_id = ANY($1::text[])
 ORDER BY entry_id, line_no;
@@ -130,15 +130,15 @@ ORDER BY entry_id, line_no;
 -- violations. Entry.ID is derived from the broker sequence so duplicates
 -- collapse to the same row.
 INSERT INTO journal_entries (
-    id, sequence, entry_date, period_id, currency, description, posted_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    id, sequence, entry_date, period_id, currency, description, posted_at, source_kind, source_number
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING;
 
 -- name: InsertLine :exec
 -- Idempotent for the same reason as InsertEntry.
 INSERT INTO journal_lines (
-    entry_id, line_no, account_code, side, amount, memo, branch_id, tags
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    entry_id, line_no, account_code, side, amount, memo, branch_id, counterparty_id, tags
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (entry_id, line_no) DO NOTHING;
 
 -- name: GetLastSequence :one
