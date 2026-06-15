@@ -15,9 +15,8 @@ Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
 Type "ledger tui" Enter
-Sleep 3s
-Enter
-Sleep 2s
+# No select screen — launches straight into the bookkeeper chat (first branch).
+Sleep 5s
 
 # 6199 其他費用（舊制）is deactivated in the seed → expect a reject, not a
 # silent switch to an active account like 6117 雜費.

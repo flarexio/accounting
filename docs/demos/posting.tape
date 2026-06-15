@@ -16,11 +16,8 @@ Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrains Mono, Noto Sans Mono CJK TC"
 
 Type "ledger tui" Enter
-Sleep 3s
-
-# Selection screen → enter the bookkeeper chat.
-Enter
-Sleep 2s
+# No select screen — launches straight into the bookkeeper chat (first branch).
+Sleep 5s
 
 Type "5/10 台北總公司現金賣了一批商品，收到 105,000 含稅。"
 Sleep 1s
@@ -30,8 +27,8 @@ Enter
 Sleep 20s
 
 # Hold on the posted entry so it can be read, then ctrl+c quits to the shell.
-# (In chat, esc cancels a running turn / steps back; the turn waits above are long
-# enough that we're idle here, so a single ctrl+c is a clean quit.)
+# (In chat, esc cancels a running turn or, when idle, resets the session; the turn
+# waits above are long enough that we're idle here, so ctrl+c is a clean quit.)
 Sleep 4s
 Ctrl+C
 Sleep 1s
