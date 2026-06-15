@@ -63,6 +63,20 @@ func (h *ApplyBranch) Handle(ctx context.Context, evt Event) error {
 	return h.Repo.PutBranch(ctx, e.Branch)
 }
 
+// ApplyCounterparty projects accounting.CounterpartyAdded by upserting the customer/supplier.
+type ApplyCounterparty struct {
+	Repo accounting.LedgerRepository
+}
+
+// Handle implements bookkeeping.EventHandler.
+func (h *ApplyCounterparty) Handle(ctx context.Context, evt Event) error {
+	e, ok := evt.(accounting.CounterpartyAdded)
+	if !ok {
+		return fmt.Errorf("bookkeeping: ApplyCounterparty received %T on subject %q, want CounterpartyAdded", evt, evt.EventSubject())
+	}
+	return h.Repo.PutCounterparty(ctx, e.Counterparty)
+}
+
 // ApplyPeriod projects accounting.PeriodAdded by upserting the accounting period.
 type ApplyPeriod struct {
 	Repo accounting.LedgerRepository

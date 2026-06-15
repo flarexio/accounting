@@ -53,6 +53,27 @@ func (q *Queries) GetBranch(ctx context.Context, id string) (Branch, error) {
 	return i, err
 }
 
+const getCounterparty = `-- name: GetCounterparty :one
+SELECT id, name, kind, tax_id, active, aliases, description
+FROM counterparties
+WHERE id = $1
+`
+
+func (q *Queries) GetCounterparty(ctx context.Context, id string) (Counterparty, error) {
+	row := q.db.QueryRow(ctx, getCounterparty, id)
+	var i Counterparty
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Kind,
+		&i.TaxID,
+		&i.Active,
+		&i.Aliases,
+		&i.Description,
+	)
+	return i, err
+}
+
 const getEntry = `-- name: GetEntry :one
 SELECT id, sequence, entry_date, period_id, currency, description, posted_at
 FROM journal_entries
@@ -301,6 +322,40 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.Timezone,
 			&i.RetainedEarningsCode,
 			&i.Policy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCounterparties = `-- name: ListCounterparties :many
+SELECT id, name, kind, tax_id, active, aliases, description
+FROM counterparties
+ORDER BY id
+`
+
+func (q *Queries) ListCounterparties(ctx context.Context) ([]Counterparty, error) {
+	rows, err := q.db.Query(ctx, listCounterparties)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Counterparty
+	for rows.Next() {
+		var i Counterparty
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.TaxID,
+			&i.Active,
+			&i.Aliases,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -648,6 +703,41 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) er
 		arg.Name,
 		arg.Timezone,
 		arg.RetainedEarningsCode,
+	)
+	return err
+}
+
+const upsertCounterparty = `-- name: UpsertCounterparty :exec
+INSERT INTO counterparties (id, name, kind, tax_id, active, aliases, description)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    kind = EXCLUDED.kind,
+    tax_id = EXCLUDED.tax_id,
+    active = EXCLUDED.active,
+    aliases = EXCLUDED.aliases,
+    description = EXCLUDED.description
+`
+
+type UpsertCounterpartyParams struct {
+	ID          string
+	Name        string
+	Kind        string
+	TaxID       string
+	Active      bool
+	Aliases     []string
+	Description string
+}
+
+func (q *Queries) UpsertCounterparty(ctx context.Context, arg UpsertCounterpartyParams) error {
+	_, err := q.db.Exec(ctx, upsertCounterparty,
+		arg.ID,
+		arg.Name,
+		arg.Kind,
+		arg.TaxID,
+		arg.Active,
+		arg.Aliases,
+		arg.Description,
 	)
 	return err
 }

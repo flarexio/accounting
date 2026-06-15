@@ -50,3 +50,26 @@ func TestSeedScenario_ProjectsEveryEntityViaEvents(t *testing.T) {
 		t.Fatalf("period not projected: %+v", periods)
 	}
 }
+
+// Counterparties are not seeded reference data; they are created by publishing
+// CounterpartyAdded, which ApplyCounterparty projects.
+func TestApplyCounterparty_Projects(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewAccountingRepository()
+	bus := inproc.NewAccountingBus()
+	router := bookkeeping.NewRouter().
+		On(accounting.SubjectCounterpartyAdded, &bookkeeping.ApplyCounterparty{Repo: repo})
+	if err := bus.Subscribe(router); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	cp := accounting.Counterparty{ID: "CP-0001", Name: "TSMC", Kind: accounting.CounterpartyCustomer, Active: true}
+	if err := bus.Publish(ctx, accounting.CounterpartyAdded{Counterparty: cp}, accounting.ExpectedSequence{}); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	got, ok, err := repo.Counterparty(ctx, "CP-0001")
+	if err != nil || !ok || got.Name != "TSMC" {
+		t.Fatalf("counterparty not projected: ok=%v err=%v %+v", ok, err, got)
+	}
+}

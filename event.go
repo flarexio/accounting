@@ -18,6 +18,7 @@ const (
 	SubjectAccountAdded      = "accounting.account.added"
 	SubjectBranchAdded       = "accounting.branch.added"
 	SubjectPeriodAdded       = "accounting.period.added"
+	SubjectCounterpartyAdded = "accounting.counterparty.added"
 )
 
 // SubjectPolicySet is the bus subject PolicySet events are published on.
@@ -69,6 +70,14 @@ type PeriodAdded struct {
 
 // EventSubject reports the bus subject PeriodAdded lives on.
 func (PeriodAdded) EventSubject() string { return SubjectPeriodAdded }
+
+// CounterpartyAdded carries one customer/supplier for the projection to upsert.
+type CounterpartyAdded struct {
+	Counterparty Counterparty `json:"counterparty"`
+}
+
+// EventSubject reports the bus subject CounterpartyAdded lives on.
+func (CounterpartyAdded) EventSubject() string { return SubjectCounterpartyAdded }
 
 // PolicySet carries the company's bookkeeping policy for the projection to
 // store; the empty string clears it.

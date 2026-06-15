@@ -29,6 +29,16 @@ type Company struct {
 	Policy               string
 }
 
+type Counterparty struct {
+	ID          string
+	Name        string
+	Kind        string
+	TaxID       string
+	Active      bool
+	Aliases     []string
+	Description string
+}
+
 type JournalEntry struct {
 	ID          string
 	Sequence    int64

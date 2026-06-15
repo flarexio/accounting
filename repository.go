@@ -10,11 +10,13 @@ type LedgerRepository interface {
 	Account(ctx context.Context, code string) (Account, bool, error)
 	Period(ctx context.Context, id string) (Period, bool, error)
 	Branch(ctx context.Context, id string) (Branch, bool, error)
+	Counterparty(ctx context.Context, id string) (Counterparty, bool, error)
 	Entry(ctx context.Context, id string) (JournalEntry, bool, error)
 
 	Accounts(ctx context.Context) ([]Account, error)
 	Periods(ctx context.Context) ([]Period, error)
 	Branches(ctx context.Context) ([]Branch, error)
+	Counterparties(ctx context.Context) ([]Counterparty, error)
 	Entries(ctx context.Context) ([]JournalEntry, error)
 
 	// EntriesByPeriod returns every posted entry whose PeriodID matches.
@@ -43,6 +45,8 @@ type LedgerRepository interface {
 	// PutPeriod stores a period, overwriting any prior value.
 	PutPeriod(ctx context.Context, p Period) error
 	PutBranch(ctx context.Context, b Branch) error
+	// PutCounterparty stores a counterparty, overwriting any prior value.
+	PutCounterparty(ctx context.Context, c Counterparty) error
 
 	// AppendEntry writes the entry, its lines, and relations in one atomic write,
 	// recording the sequence from any EventMeta in the context.
