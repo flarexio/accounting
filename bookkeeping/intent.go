@@ -2,6 +2,7 @@ package bookkeeping
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/flarexio/accounting"
 )
@@ -12,6 +13,7 @@ type IntentKind string
 const (
 	IntentPostJournal    IntentKind = "post_journal"
 	IntentReverseJournal IntentKind = "reverse_journal"
+	IntentSettle         IntentKind = "settle"
 	IntentReject         IntentKind = "reject"
 )
 
@@ -23,6 +25,7 @@ type Intent struct {
 	Kind    IntentKind                `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
 	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`
+	Settle  *SettleIntent             `json:"settle,omitempty"`
 	Reject  *RejectIntent             `json:"reject,omitempty"`
 	Final   bool                      `json:"final"`
 }
@@ -44,6 +47,16 @@ type ReverseIntent struct {
 	Note    string                    `json:"note,omitempty"`
 }
 
+// SettleIntent is the payload of a settle Intent: it posts a payment entry
+// (Entry, typically Dr cash/bank, Cr the receivable/payable) and links it to
+// the invoice/bill it clears with a settles JournalRelation. InvoiceEntryID is
+// that invoice/bill's JE-id; Note is free-text rationale.
+type SettleIntent struct {
+	Entry          accounting.JournalIntent `json:"entry"`
+	InvoiceEntryID string                   `json:"invoice_entry_id"`
+	Note           string                   `json:"note,omitempty"`
+}
+
 // IntentDescriptor is the prompt-facing description of one Intent variant, so
 // the prompt and the Registry never drift.
 type IntentDescriptor struct {
@@ -56,6 +69,8 @@ const (
 	postJournalArgsShape = `{"date":"2026-05-12","period_id":"<period_id>","currency":"USD","description":"...","source":null,"lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":"<CP-id or empty>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":""}}]}`
 
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"<amount_error|account_error|duplicate|customer_cancel|period_end|other>","note":"..."}`
+
+	settleArgsShape = `{"entry":{"date":"2026-05-20","period_id":"<period_id>","currency":"USD","description":"...","source":{"kind":"receipt","number":"..."},"lines":[{"account_code":"<cash/bank>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":""}},{"account_code":"<receivable/payable>","side":"credit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>","counterparty_id":"<CP-id>"}}]},"invoice_entry_id":"<JE-id of the invoice this clears>","note":"..."}`
 
 	rejectArgsShape = `{"reason":"<explanation why the request cannot be fulfilled>"}`
 )
@@ -76,6 +91,11 @@ func Intents() []IntentDescriptor {
 			ArgsShape: reverseJournalArgsShape,
 		},
 		{
+			Kind:      IntentSettle,
+			Summary:   "Record a payment that settles an invoice/bill: post the receipt entry and link it to the invoice's JE-id.",
+			ArgsShape: settleArgsShape,
+		},
+		{
 			Kind:      IntentReject,
 			Summary:   "Decline a request that cannot be fulfilled; provide a reason.",
 			ArgsShape: rejectArgsShape,
@@ -92,23 +112,10 @@ func IntentSchema() json.RawMessage {
 	return json.RawMessage(intentSchemaJSON)
 }
 
-const intentSchemaJSON = `{
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["kind", "post_journal", "reverse_journal", "reject", "final"],
-  "properties": {
-    "kind": {
-      "type": "string",
-      "enum": ["post_journal", "reverse_journal", "reject"]
-    },
-    "final": {
-      "type": "boolean",
-      "description": "true if this action completes the request; false if you will follow it with another action this turn-cycle. A single post/reverse/reject is itself final. The loop stops once it executes a final action."
-    },
-    "post_journal": {
-      "anyOf": [
-        { "type": "null" },
-        {
+// postPayloadSchema is the strict object schema for a journal posting, shared by
+// post_journal and settle.entry (interpolated into intentSchemaJSON) so the two
+// never drift.
+const postPayloadSchema = `{
           "type": "object",
           "additionalProperties": false,
           "required": ["date", "period_id", "currency", "description", "lines", "source"],
@@ -157,6 +164,39 @@ const intentSchemaJSON = `{
               }
             }
           }
+        }`
+
+var intentSchemaJSON = fmt.Sprintf(`{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "post_journal", "reverse_journal", "settle", "reject", "final"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["post_journal", "reverse_journal", "settle", "reject"]
+    },
+    "final": {
+      "type": "boolean",
+      "description": "true if this action completes the request; false if you will follow it with another action this turn-cycle. A single post/reverse/settle/reject is itself final. The loop stops once it executes a final action."
+    },
+    "post_journal": {
+      "anyOf": [
+        { "type": "null" },
+        %[1]s
+      ]
+    },
+    "settle": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entry", "invoice_entry_id", "note"],
+          "properties": {
+            "entry": %[1]s,
+            "invoice_entry_id": { "type": "string", "description": "JE-id of the invoice or bill entry this payment settles (the receivable/payable being cleared)." },
+            "note": { "type": "string", "description": "Optional free-text note on the settlement, e.g. 'paid in full' or 'partial payment'. May be empty." }
+          }
         }
       ]
     },
@@ -193,4 +233,4 @@ const intentSchemaJSON = `{
       ]
     }
   }
-}`
+}`, postPayloadSchema)
