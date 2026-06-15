@@ -120,15 +120,16 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 }
 
 // buildBookEngine wires the OpenAI bookkeeper reasoning engine. operatorBranchID
-// is injected into the prompt; pass "" to omit the operator-branch hint. recall
-// adds the cross-turn recall guidance (pair it with a RecentEntries buffer on the agent).
-func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM, operatorBranchID string, recall bool) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+// is injected into the prompt; pass "" to omit the operator-branch hint. The
+// recall guidance is derived from the tool set at render time, so it needs no
+// flag here -- wiring the recent_entries tool (via the agent's RecentEntries
+// buffer) is what turns it on.
+func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM, operatorBranchID string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
 		return nil, fmt.Errorf("book-run: openai engine: %w", err)
 	}
 	renderer.OperatorBranchID = operatorBranchID
-	renderer.RecallEnabled = recall
 	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 		APIKey:                       llmCfg.APIKey,
 		BaseURL:                      llmCfg.BaseURL,

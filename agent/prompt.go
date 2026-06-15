@@ -25,9 +25,6 @@ type PromptRenderer struct {
 	Branches         []accounting.Branch
 	OperatorBranchID string
 	Clock            bookkeeping.Clock
-	// RecallEnabled adds the recall guidance to the prompt; set it when the
-	// bookkeeper carries a RecentEntries buffer and the recent_entries/get_entry tools.
-	RecallEnabled bool
 }
 
 // NewPromptRenderer snapshots the company, chart, periods, and branches from repo.
@@ -64,7 +61,7 @@ func NewPromptRenderer(ctx context.Context, repo accounting.LedgerRepository) (P
 
 func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) {
 	messages := []llm.Message{
-		{Role: llm.MessageRoleSystem, Content: r.systemPrompt()},
+		{Role: llm.MessageRoleSystem, Content: r.systemPrompt(hasTool(input.Tools, toolRecentEntries))},
 		{Role: llm.MessageRoleUser, Content: taskMessage(input)},
 	}
 
@@ -256,11 +253,24 @@ func (r PromptRenderer) branchesText() string {
 	return b.String()
 }
 
+// hasTool reports whether specs advertise a tool with the given name. The
+// recall guidance is keyed off the recent_entries tool's presence so the prompt
+// can never advertise a recall ability the tool set does not back.
+func hasTool(specs []llm.ToolSpec, name string) bool {
+	for _, s := range specs {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // systemPrompt assembles everything that is stable for this renderer's
 // lifetime: agent role, intent catalog from the registry, payload format
-// rules, behavior rules, and the tenant snapshot. The user message only
-// carries the per-call task and any optional Instructions.
-func (r PromptRenderer) systemPrompt() string {
+// rules, behavior rules, and the tenant snapshot. recall adds the recall
+// guidance; it is derived from the available tools, not stored. The user
+// message only carries the per-call task and any optional Instructions.
+func (r PromptRenderer) systemPrompt(recall bool) string {
 	var b strings.Builder
 	b.WriteString(systemPromptHeader)
 	b.WriteString("\n\nAvailable intents:\n")
@@ -268,7 +278,7 @@ func (r PromptRenderer) systemPrompt() string {
 	b.WriteString(systemPromptFormatRules)
 	b.WriteString(systemPromptBehaviorRules)
 	b.WriteString(systemPromptMultiActionRules)
-	if r.RecallEnabled {
+	if recall {
 		b.WriteString(systemPromptRecallRules)
 	}
 	b.WriteString("\n\n")
