@@ -206,17 +206,96 @@ func TestModelCtrlCQuitsDuringTurn(t *testing.T) {
 	}
 }
 
-func TestModelEscClosesSessionAndReturns(t *testing.T) {
+func TestModelEscReturnsToSelectWithMultipleOptions(t *testing.T) {
 	fake := &fakeSession{}
-	m := chatModel(t, fake)
+	m := newModel(context.Background(), []Option{
+		{Label: "a", Start: func(context.Context) (Session, error) { return fake, nil }},
+		{Label: "b", Start: func(context.Context) (Session, error) { return &fakeSession{}, nil }},
+	})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(model)
 
-	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(model)
+	ready := cmd().(sessionReadyMsg)
+	next, _ = m.Update(ready)
+	m = next.(model)
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(model)
 	if m.state != stateSelect {
 		t.Fatalf("state = %v, want stateSelect after esc", m.state)
 	}
 	if !fake.closed {
 		t.Error("esc should close the session before returning to the start screen")
+	}
+}
+
+func TestModelEscReconnectsWithSingleOption(t *testing.T) {
+	fake := &fakeSession{}
+	m := chatModel(t, fake)
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(model)
+	if !fake.closed {
+		t.Error("esc should close the open session")
+	}
+	if cmd == nil {
+		t.Fatal("esc with a single option should reconnect a fresh session")
+	}
+	if _, ok := cmd().(tea.QuitMsg); ok {
+		t.Fatal("esc must never quit; only ctrl+c/ctrl+d quit")
+	}
+	if _, ok := cmd().(sessionReadyMsg); !ok {
+		t.Fatalf("esc with a single option should start a fresh session, got %T", cmd())
+	}
+}
+
+func TestModelArrowKeysScrollTranscript(t *testing.T) {
+	m := chatModel(t, &fakeSession{})
+	for range 40 {
+		m.appendLine(line{kind: lineSystem, text: "transcript line"})
+	}
+	if !m.viewport.AtBottom() {
+		t.Fatal("a fresh transcript should be pinned to the bottom")
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = next.(model)
+	if m.viewport.AtBottom() {
+		t.Fatal("up should scroll the transcript up, away from the bottom")
+	}
+	if m.running {
+		t.Fatal("scrolling must not start a turn")
+	}
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(model)
+	if !m.viewport.AtBottom() {
+		t.Fatal("down should scroll one line back to the bottom")
+	}
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	m = next.(model)
+	if !m.viewport.AtTop() {
+		t.Fatal("home should jump to the top of the transcript")
+	}
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	m = next.(model)
+	if !m.viewport.AtBottom() {
+		t.Fatal("end should jump to the bottom of the transcript")
+	}
+}
+
+func TestModelCtrlDQuits(t *testing.T) {
+	m := chatModel(t, &fakeSession{})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl+d should produce a command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("ctrl+d should quit, got %T", cmd())
 	}
 }
 

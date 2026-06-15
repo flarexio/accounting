@@ -155,7 +155,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "ctrl+c" {
+	switch msg.String() {
+	case "ctrl+c", "ctrl+d":
 		return m, tea.Quit
 	}
 
@@ -172,8 +173,6 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			return m, m.startSession(m.options[m.cursor])
-		case "q", "esc":
-			return m, tea.Quit
 		}
 		return m, nil
 
@@ -191,11 +190,21 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.session = nil
 			}
 			m.state = stateSelect
+			// A single branch has no menu to show, so esc reconnects a fresh session.
+			if len(m.options) == 1 {
+				return m, m.startSession(m.options[0])
+			}
 			return m, nil
-		case "pgup", "pgdown", "ctrl+u", "ctrl+d":
+		case "up", "down", "pgup", "pgdown":
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
+		case "home":
+			m.viewport.GotoTop()
+			return m, nil
+		case "end":
+			m.viewport.GotoBottom()
+			return m, nil
 		case "enter":
 			if m.running {
 				return m, nil
@@ -444,7 +453,7 @@ func (m model) View() tea.View {
 		content = "Starting accounting TUI..."
 	case m.err != nil:
 		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
-			footerStyle.Render("ctrl+c quit")
+			footerStyle.Render("ctrl+c/ctrl+d quit")
 	case m.state == stateSelect && len(m.options) == 1:
 		content = "Connecting to ledger..."
 	case m.state == stateSelect:
@@ -482,7 +491,7 @@ func (m model) selectView() string {
 	b.WriteString(keyHints(
 		[2]string{"↑/↓", "move"},
 		[2]string{"enter", "start"},
-		[2]string{"q", "quit"},
+		[2]string{"ctrl+c/ctrl+d", "quit"},
 	))
 	return b.String()
 }
@@ -500,12 +509,12 @@ func (m model) chatView() string {
 
 	footer := keyHints(
 		[2]string{"enter", "send"},
-		[2]string{"pgup/pgdn", "scroll"},
+		[2]string{"↑/↓ pgup/pgdn", "scroll"},
 		[2]string{"esc", "back"},
-		[2]string{"ctrl+c", "quit"},
+		[2]string{"ctrl+c/ctrl+d", "quit"},
 	)
 	if m.running {
-		footer = keyHints([2]string{"esc", "cancel turn"}, [2]string{"ctrl+c", "quit"})
+		footer = keyHints([2]string{"esc", "cancel turn"}, [2]string{"ctrl+c/ctrl+d", "quit"})
 	}
 
 	return strings.Join([]string{
