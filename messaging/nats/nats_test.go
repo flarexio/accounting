@@ -10,7 +10,46 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/flarexio/accounting"
+	"github.com/flarexio/accounting/bookkeeping"
 )
+
+// TestCodec_CoversEverySupportedSubject guards that encodeEvent and
+// decodeBySubject handle every subject the bus advertises -- a new event type
+// added to supportedSubjects but not the codec fails here instead of only at
+// runtime on NATS (the in-proc bus does not encode).
+func TestCodec_CoversEverySupportedSubject(t *testing.T) {
+	period := accounting.Period{ID: "2026-05", Start: accounting.NewDate(2026, 5, 1), End: accounting.NewDate(2026, 5, 31), Status: accounting.PeriodOpen}
+	samples := map[string]bookkeeping.Event{
+		accounting.SubjectJournalPosted:     sampleEvent(),
+		accounting.SubjectPeriodClosure:     accounting.PeriodClosure{Period: period},
+		accounting.SubjectCompanyConfigured: accounting.CompanyConfigured{Company: accounting.Company{ID: "acme"}},
+		accounting.SubjectAccountAdded:      accounting.AccountAdded{Account: accounting.Account{Code: "1000"}},
+		accounting.SubjectBranchAdded:       accounting.BranchAdded{Branch: accounting.Branch{ID: "main"}},
+		accounting.SubjectPeriodAdded:       accounting.PeriodAdded{Period: period},
+		accounting.SubjectCounterpartyAdded: accounting.CounterpartyAdded{Counterparty: accounting.Counterparty{ID: "CP-0001"}},
+		accounting.SubjectPolicySet:         accounting.PolicySet{Policy: "x"},
+	}
+	for _, subject := range supportedSubjects {
+		evt, ok := samples[subject]
+		if !ok {
+			t.Fatalf("no sample event for supported subject %q; add one and make sure encodeEvent/decodeBySubject handle it", subject)
+		}
+		if evt.EventSubject() != subject {
+			t.Fatalf("sample for %q has EventSubject %q", subject, evt.EventSubject())
+		}
+		body, err := encodeEvent(evt)
+		if err != nil {
+			t.Fatalf("encodeEvent for subject %q: %v", subject, err)
+		}
+		decoded, err := decodeBySubject(subject, body)
+		if err != nil {
+			t.Fatalf("decodeBySubject for subject %q: %v", subject, err)
+		}
+		if decoded.EventSubject() != subject {
+			t.Fatalf("decoded event for %q has EventSubject %q", subject, decoded.EventSubject())
+		}
+	}
+}
 
 func sampleEvent() accounting.JournalPosted {
 	return accounting.JournalPosted{

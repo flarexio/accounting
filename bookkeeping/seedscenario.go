@@ -9,15 +9,16 @@ import (
 )
 
 // SeedScenario is the "seed reference data" use case: it publishes one event per
-// entity (company, each account, each branch, each period) so the projection
-// handlers upsert them. It is operator-driven (the `ledger seed` CLI), not an
-// agent Intent.
+// entity (company, each account, each branch, each period, each counterparty) so
+// the projection handlers upsert them. It is operator-driven (the `ledger seed`
+// CLI), not an agent Intent.
 type SeedScenario struct {
 	Publisher Publisher
 }
 
-// Execute validates the scenario and publishes its reference data as a stream
-// of per-entity events, in dependency order: company, accounts, branches, periods.
+// Execute validates the scenario and publishes its reference data as a stream of
+// per-entity events, in dependency order: company, accounts, branches, periods,
+// counterparties.
 func (uc SeedScenario) Execute(ctx context.Context, scenario accounting.Scenario) error {
 	if uc.Publisher == nil {
 		return errors.New("bookkeeping: seed scenario has no event publisher")
@@ -46,6 +47,11 @@ func (uc SeedScenario) Execute(ctx context.Context, scenario accounting.Scenario
 	}
 	for _, p := range scenario.Periods {
 		if err := uc.publish(ctx, accounting.PeriodAdded{Period: p}); err != nil {
+			return err
+		}
+	}
+	for _, c := range scenario.Counterparties {
+		if err := uc.publish(ctx, accounting.CounterpartyAdded{Counterparty: c}); err != nil {
 			return err
 		}
 	}
