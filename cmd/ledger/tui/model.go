@@ -19,13 +19,6 @@ import (
 	"github.com/flarexio/accounting/bookkeeping"
 )
 
-type viewState int
-
-const (
-	stateSelect viewState = iota // choosing an agent + scenario
-	stateChat                    // conversing with a chosen session
-)
-
 type lineKind int
 
 const (
@@ -53,10 +46,8 @@ type sessionReadyMsg struct {
 
 type model struct {
 	ctx     context.Context
-	options []Option
-
-	state  viewState
-	cursor int // selection index on the start screen
+	options []Option // one per branch; the active one drives the session
+	current int      // index into options of the active branch
 
 	session Session
 	label   string
@@ -91,18 +82,16 @@ func newModel(ctx context.Context, options []Option) model {
 	return model{
 		ctx:      ctx,
 		options:  options,
-		state:    stateSelect,
 		input:    ti,
 		spinner:  sp,
 		viewport: viewport.New(),
 	}
 }
 
+// Init starts straight into the first branch's session; there is no select
+// screen. Switch branches in-session with /branch.
 func (m model) Init() tea.Cmd {
-	if len(m.options) == 1 {
-		return tea.Batch(textinput.Blink, m.startSession(m.options[0]))
-	}
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.startSession(m.options[0]))
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -123,7 +112,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.session = msg.session
 		m.label = msg.label
-		m.state = stateChat
 		m.lines = nil
 		m.turn = 0
 		m.input.Focus()
@@ -146,7 +134,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.state == stateChat && !m.running {
+	if m.session != nil && !m.running {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -159,69 +147,51 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "ctrl+d":
 		return m, tea.Quit
 	}
+	if m.session == nil {
+		return m, nil // still connecting; only quit keys act
+	}
 
-	switch m.state {
-	case stateSelect:
-		switch msg.String() {
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+	switch msg.String() {
+	case "esc":
+		if m.running {
+			if m.cancel != nil {
+				m.cancel() // cancel the in-flight turn, keep the program open
 			}
-		case "down", "j":
-			if m.cursor < len(m.options)-1 {
-				m.cursor++
-			}
-		case "enter":
-			return m, m.startSession(m.options[m.cursor])
+			return m, nil
 		}
+		// No select screen to return to; esc starts a fresh session on the
+		// current branch (clears the conversation).
+		_ = m.session.Close()
+		m.session = nil
+		return m, m.startSession(m.options[m.current])
+	case "up", "down", "pgup", "pgdown":
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	case "home":
+		m.viewport.GotoTop()
 		return m, nil
-
-	case stateChat:
-		switch msg.String() {
-		case "esc":
-			if m.running {
-				if m.cancel != nil {
-					m.cancel() // cancel the in-flight turn, keep the program open
-				}
-				return m, nil
-			}
-			if m.session != nil {
-				_ = m.session.Close()
-				m.session = nil
-			}
-			m.state = stateSelect
-			// A single branch has no menu to show, so esc reconnects a fresh session.
-			if len(m.options) == 1 {
-				return m, m.startSession(m.options[0])
-			}
-			return m, nil
-		case "up", "down", "pgup", "pgdown":
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
-		case "home":
-			m.viewport.GotoTop()
-			return m, nil
-		case "end":
-			m.viewport.GotoBottom()
-			return m, nil
-		case "enter":
-			if m.running {
-				return m, nil
-			}
-			request := strings.TrimSpace(m.input.Value())
-			if request == "" {
-				return m, nil
-			}
-			m.input.Reset()
-			return m.startTurn(request)
-		}
-		if !m.running {
-			var cmd tea.Cmd
-			m.input, cmd = m.input.Update(msg)
-			return m, cmd
-		}
+	case "end":
+		m.viewport.GotoBottom()
 		return m, nil
+	case "enter":
+		if m.running {
+			return m, nil
+		}
+		request := strings.TrimSpace(m.input.Value())
+		if request == "" {
+			return m, nil
+		}
+		m.input.Reset()
+		if strings.HasPrefix(request, "/") {
+			return m.handleCommand(request)
+		}
+		return m.startTurn(request)
+	}
+	if !m.running {
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -454,46 +424,14 @@ func (m model) View() tea.View {
 	case m.err != nil:
 		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
 			footerStyle.Render("ctrl+c quit")
-	case m.state == stateSelect && len(m.options) == 1:
+	case m.session == nil:
 		content = "Connecting to ledger..."
-	case m.state == stateSelect:
-		content = m.selectView()
 	default:
 		content = m.chatView()
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
-}
-
-func (m model) selectView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("Accounting — choose your working branch"))
-	b.WriteString("\n")
-	b.WriteString(divider(min(m.width, 60)))
-	b.WriteString("\n\n")
-	for i, opt := range m.options {
-		cursor := "  "
-		label := opt.Label
-		if i == m.cursor {
-			cursor = cursorStyle.Render("❯ ")
-			label = selectedStyle.Render(label)
-		}
-		b.WriteString(cursor)
-		b.WriteString(label)
-		if opt.Hint != "" {
-			b.WriteString("  ")
-			b.WriteString(hintStyle.Render(opt.Hint))
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(keyHints(
-		[2]string{"↑/↓", "move"},
-		[2]string{"enter", "start"},
-		[2]string{"ctrl+c", "quit"},
-	))
-	return b.String()
 }
 
 func (m model) chatView() string {
@@ -508,9 +446,9 @@ func (m model) chatView() string {
 	}
 
 	footer := keyHints(
-		[2]string{"enter", "send"},
+		[2]string{"enter", "send (or /help)"},
 		[2]string{"↑/↓ pgup/pgdn", "scroll"},
-		[2]string{"esc", "back"},
+		[2]string{"esc", "reset"},
 		[2]string{"ctrl+c", "quit"},
 	)
 	if m.running {

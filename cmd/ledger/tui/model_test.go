@@ -52,21 +52,31 @@ func newTestModel(session Session) model {
 	return next.(model)
 }
 
-// chatModel selects the option so the returned model is in stateChat.
+// chatModel starts the first branch's session so the returned model is in chat.
 func chatModel(t *testing.T, session Session) model {
 	t.Helper()
 	m := newTestModel(session)
-	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = next.(model)
-	if cmd == nil {
-		t.Fatal("enter on the start screen should produce a command")
-	}
-	ready, ok := cmd().(sessionReadyMsg)
+	ready, ok := m.startSession(m.options[0])().(sessionReadyMsg)
 	if !ok {
-		t.Fatal("start command should yield a sessionReadyMsg")
+		t.Fatal("startSession should yield a sessionReadyMsg")
 	}
-	next, _ = m.Update(ready)
+	next, _ := m.Update(ready)
 	return next.(model)
+}
+
+// twoBranchModel starts a model with two branches (hq, tc) already in chat.
+func twoBranchModel(t *testing.T) (model, *fakeSession, *fakeSession) {
+	t.Helper()
+	hq, tc := &fakeSession{}, &fakeSession{}
+	m := newModel(context.Background(), []Option{
+		{Label: "HQ", Hint: "hq", Start: func(context.Context) (Session, error) { return hq, nil }},
+		{Label: "Taichung", Hint: "tc", Start: func(context.Context) (Session, error) { return tc, nil }},
+	})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(model)
+	ready := m.startSession(m.options[0])().(sessionReadyMsg)
+	next, _ = m.Update(ready)
+	return next.(model), hq, tc
 }
 
 func driveTurn(t *testing.T, m model) model {
@@ -82,26 +92,20 @@ func driveTurn(t *testing.T, m model) model {
 	return m
 }
 
-func TestModelSelectStartsSession(t *testing.T) {
+func TestModelAutoStartsFirstBranch(t *testing.T) {
 	fake := &fakeSession{}
 	m := newTestModel(fake)
 
-	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = next.(model)
-	if cmd == nil {
-		t.Fatal("enter should produce a start-session command")
+	// No select screen: Init starts the first branch's session straight away.
+	if cmd := m.Init(); cmd == nil {
+		t.Fatal("Init should auto-start a session")
 	}
-	msg := cmd()
-	ready, ok := msg.(sessionReadyMsg)
+	ready, ok := m.startSession(m.options[0])().(sessionReadyMsg)
 	if !ok {
-		t.Fatalf("command result = %T, want sessionReadyMsg", msg)
+		t.Fatalf("startSession should yield a sessionReadyMsg")
 	}
-
-	next, _ = m.Update(ready)
+	next, _ := m.Update(ready)
 	m = next.(model)
-	if m.state != stateChat {
-		t.Fatalf("state = %v, want stateChat", m.state)
-	}
 	if m.session != fake {
 		t.Error("session was not stored on the model")
 	}
@@ -145,14 +149,14 @@ func TestModelRunTurnStreamsEvents(t *testing.T) {
 	}
 }
 
-func TestModelCtrlCQuitsFromSelect(t *testing.T) {
+func TestModelCtrlCQuitsBeforeSession(t *testing.T) {
 	m := newTestModel(&fakeSession{})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+c should produce a command")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Fatalf("ctrl+c on the start screen should quit, got %T", cmd())
+		t.Fatalf("ctrl+c should quit even before the session is up, got %T", cmd())
 	}
 }
 
@@ -173,8 +177,8 @@ func TestModelEscCancelsRunningTurn(t *testing.T) {
 			t.Fatal("esc during a turn must cancel the turn, not quit")
 		}
 	}
-	if m.state != stateChat {
-		t.Fatalf("state = %v, want stateChat: cancelling a turn keeps the session open", m.state)
+	if m.session == nil {
+		t.Fatal("cancelling a turn keeps the session open")
 	}
 
 	m = driveTurn(t, m)
@@ -206,32 +210,7 @@ func TestModelCtrlCQuitsDuringTurn(t *testing.T) {
 	}
 }
 
-func TestModelEscReturnsToSelectWithMultipleOptions(t *testing.T) {
-	fake := &fakeSession{}
-	m := newModel(context.Background(), []Option{
-		{Label: "a", Start: func(context.Context) (Session, error) { return fake, nil }},
-		{Label: "b", Start: func(context.Context) (Session, error) { return &fakeSession{}, nil }},
-	})
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m = next.(model)
-
-	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = next.(model)
-	ready := cmd().(sessionReadyMsg)
-	next, _ = m.Update(ready)
-	m = next.(model)
-
-	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	m = next.(model)
-	if m.state != stateSelect {
-		t.Fatalf("state = %v, want stateSelect after esc", m.state)
-	}
-	if !fake.closed {
-		t.Error("esc should close the session before returning to the start screen")
-	}
-}
-
-func TestModelEscReconnectsWithSingleOption(t *testing.T) {
+func TestModelEscReconnectsSession(t *testing.T) {
 	fake := &fakeSession{}
 	m := chatModel(t, fake)
 
@@ -241,13 +220,85 @@ func TestModelEscReconnectsWithSingleOption(t *testing.T) {
 		t.Error("esc should close the open session")
 	}
 	if cmd == nil {
-		t.Fatal("esc with a single option should reconnect a fresh session")
+		t.Fatal("esc should reconnect a fresh session")
 	}
 	if _, ok := cmd().(tea.QuitMsg); ok {
 		t.Fatal("esc must never quit; only ctrl+c/ctrl+d quit")
 	}
 	if _, ok := cmd().(sessionReadyMsg); !ok {
-		t.Fatalf("esc with a single option should start a fresh session, got %T", cmd())
+		t.Fatalf("esc should start a fresh session, got %T", cmd())
+	}
+}
+
+// submitInput types text and presses Enter.
+func submitInput(t *testing.T, m model, text string) (model, tea.Cmd) {
+	t.Helper()
+	m.input.SetValue(text)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	return next.(model), cmd
+}
+
+func TestModelBranchCommandSwitchesSession(t *testing.T) {
+	m, hq, tc := twoBranchModel(t)
+	if m.session != hq || m.current != 0 {
+		t.Fatalf("should start on the first branch (hq)")
+	}
+
+	m, cmd := submitInput(t, m, "/branch tc")
+	if cmd == nil {
+		t.Fatal("/branch <id> should start a new session")
+	}
+	if !hq.closed {
+		t.Error("/branch should close the previous branch's session")
+	}
+	if m.current != 1 {
+		t.Fatalf("current = %d, want 1 (tc)", m.current)
+	}
+	ready, ok := cmd().(sessionReadyMsg)
+	if !ok {
+		t.Fatalf("/branch should yield a sessionReadyMsg, got %T", cmd())
+	}
+	next, _ := m.Update(ready)
+	m = next.(model)
+	if m.session != tc {
+		t.Error("session should now be the tc branch")
+	}
+}
+
+func TestModelBranchCommandUnknownAndList(t *testing.T) {
+	m, _, _ := twoBranchModel(t)
+
+	m, cmd := submitInput(t, m, "/branch zz")
+	if cmd != nil {
+		t.Fatal("an unknown branch should not switch session")
+	}
+	if last := m.lines[len(m.lines)-1]; last.kind != lineSystem || !strings.Contains(last.text, "unknown branch") {
+		t.Errorf("expected an unknown-branch system note, got %+v", last)
+	}
+
+	m, _ = submitInput(t, m, "/branch")
+	if last := m.lines[len(m.lines)-1]; !strings.Contains(last.text, "hq") || !strings.Contains(last.text, "tc") {
+		t.Errorf("/branch with no id should list branches, got %q", last.text)
+	}
+}
+
+func TestModelHelpAndUnknownCommand(t *testing.T) {
+	m := chatModel(t, &fakeSession{})
+
+	m, _ = submitInput(t, m, "/help")
+	if last := m.lines[len(m.lines)-1]; !strings.Contains(last.text, "/branch") || !strings.Contains(last.text, "/help") {
+		t.Errorf("/help should list commands, got %q", last.text)
+	}
+
+	m, cmd := submitInput(t, m, "/nope")
+	if cmd != nil {
+		t.Fatal("an unknown command should not run a turn")
+	}
+	if last := m.lines[len(m.lines)-1]; !strings.Contains(last.text, "unknown command") {
+		t.Errorf("expected unknown-command note, got %q", last.text)
+	}
+	if m.running {
+		t.Fatal("a slash command must not start an agent turn")
 	}
 }
 
@@ -302,7 +353,7 @@ func TestModelCtrlDQuits(t *testing.T) {
 func TestModelViewDoesNotPanic(t *testing.T) {
 	m := newTestModel(&fakeSession{})
 	if m.View().Content == "" {
-		t.Error("select view is empty")
+		t.Error("connecting view is empty")
 	}
 	chat := chatModel(t, &fakeSession{})
 	if chat.View().Content == "" {

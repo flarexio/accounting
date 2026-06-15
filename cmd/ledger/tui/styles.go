@@ -10,12 +10,10 @@ import (
 // Palette — a cohesive modern dark theme (Catppuccin Mocha).
 var (
 	cBase   = lipgloss.Color("#1E1E2E")
-	cText   = lipgloss.Color("#CDD6F4")
 	cMuted  = lipgloss.Color("#6C7086")
 	cSubtle = lipgloss.Color("#45475A")
 
 	cPrimary = lipgloss.Color("#CBA6F7") // mauve
-	cAccent  = lipgloss.Color("#F5C2E7") // pink
 	cBlue    = lipgloss.Color("#89B4FA")
 	cLav     = lipgloss.Color("#B4BEFE")
 	cPeach   = lipgloss.Color("#FAB387")
@@ -25,16 +23,13 @@ var (
 )
 
 var (
-	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
-	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
-	cursorStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(cText)
-	hintStyle     = lipgloss.NewStyle().Foreground(cMuted)
-	footerStyle   = lipgloss.NewStyle().Foreground(cMuted)
-	keyStyle      = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
-	systemStyle   = lipgloss.NewStyle().Italic(true).Foreground(cMuted)
-	errorStyle    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
-	dividerStyle  = lipgloss.NewStyle().Foreground(cSubtle)
+	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
+	hintStyle    = lipgloss.NewStyle().Foreground(cMuted)
+	footerStyle  = lipgloss.NewStyle().Foreground(cMuted)
+	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
+	systemStyle  = lipgloss.NewStyle().Italic(true).Foreground(cMuted)
+	errorStyle   = lipgloss.NewStyle().Bold(true).Foreground(cRed)
+	dividerStyle = lipgloss.NewStyle().Foreground(cSubtle)
 )
 
 // roleColor is the accent each transcript line kind wears as a badge.

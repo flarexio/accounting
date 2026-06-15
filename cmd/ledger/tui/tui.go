@@ -36,7 +36,9 @@ type Outcome struct {
 	Summary string
 }
 
-// Option is one selectable agent + scenario pairing. Start composes lazily.
+// Option is one branch the TUI can run a session for: Label is its name, Hint
+// its id (used by /branch). The first option is started on launch; /branch
+// switches between them. Start composes the session lazily.
 type Option struct {
 	Label string
 	Hint  string
