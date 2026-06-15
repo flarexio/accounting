@@ -14,15 +14,16 @@ import (
 )
 
 // Scenario is the on-disk shape of an accounting fixture: company, chart of
-// accounts, branches, and periods that seed a LedgerRepository. It carries no
-// journal entries -- those arrive only as JournalPosted events.
+// accounts, branches, periods, and counterparties that seed a LedgerRepository.
+// It carries no journal entries -- those arrive only as JournalPosted events.
 type Scenario struct {
-	Name        string    `json:"name,omitempty" yaml:"name,omitempty"`
-	Description string    `json:"description,omitempty" yaml:"description,omitempty"`
-	Company     Company   `json:"company" yaml:"company"`
-	Accounts    []Account `json:"accounts" yaml:"accounts"`
-	Branches    []Branch  `json:"branches,omitempty" yaml:"branches,omitempty"`
-	Periods     []Period  `json:"periods" yaml:"periods"`
+	Name           string         `json:"name,omitempty" yaml:"name,omitempty"`
+	Description    string         `json:"description,omitempty" yaml:"description,omitempty"`
+	Company        Company        `json:"company" yaml:"company"`
+	Accounts       []Account      `json:"accounts" yaml:"accounts"`
+	Branches       []Branch       `json:"branches,omitempty" yaml:"branches,omitempty"`
+	Periods        []Period       `json:"periods" yaml:"periods"`
+	Counterparties []Counterparty `json:"counterparties,omitempty" yaml:"counterparties,omitempty"`
 }
 
 // LoadScenarioFile reads and decodes a scenario file from disk. The format is
@@ -108,6 +109,11 @@ func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
 	for _, p := range s.Periods {
 		if err := repo.PutPeriod(ctx, p); err != nil {
 			return fmt.Errorf("accounting: seed period %q: %w", p.ID, err)
+		}
+	}
+	for _, c := range s.Counterparties {
+		if err := repo.PutCounterparty(ctx, c); err != nil {
+			return fmt.Errorf("accounting: seed counterparty %q: %w", c.ID, err)
 		}
 	}
 	return nil
