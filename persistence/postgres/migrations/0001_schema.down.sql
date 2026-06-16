@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS journal_relations;
 DROP TABLE IF EXISTS journal_lines;
 DROP TABLE IF EXISTS journal_entries;
 DROP TABLE IF EXISTS subject_offsets;
+DROP TABLE IF EXISTS counterparties;
 DROP TABLE IF EXISTS periods;
 DROP TABLE IF EXISTS companies;
 DROP TABLE IF EXISTS branches;
