@@ -259,4 +259,4 @@ counterparties:
     tax_id: "27640903"
     active: true
     aliases: [全聯, 全聯福利中心]
-  - { id: CP-0099, name: 旭海貿易（已停業）, kind: supplier, active: false, aliases: [旭海] }
+  - { id: CP-0006, name: 旭海貿易（已停業）, kind: supplier, active: false, aliases: [旭海] }

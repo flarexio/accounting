@@ -110,7 +110,7 @@ func TestValidator_Counterparty(t *testing.T) {
 	for _, c := range []accounting.Counterparty{
 		{ID: "CP-0001", Name: "Acme", Kind: accounting.CounterpartyCustomer, Active: true},
 		{ID: "CP-0002", Name: "Beta", Kind: accounting.CounterpartyCustomer, Active: true},
-		{ID: "CP-0099", Name: "Old", Kind: accounting.CounterpartySupplier, Active: false},
+		{ID: "CP-0003", Name: "Old", Kind: accounting.CounterpartySupplier, Active: false},
 	} {
 		if err := repo.PutCounterparty(ctx, c); err != nil {
 			t.Fatalf("seed counterparty: %v", err)
@@ -135,7 +135,7 @@ func TestValidator_Counterparty(t *testing.T) {
 	})
 	t.Run("inactive counterparty rejected", func(t *testing.T) {
 		intent := balancedAWSIntent()
-		intent.Lines[0].Dimensions.CounterpartyID = "CP-0099"
+		intent.Lines[0].Dimensions.CounterpartyID = "CP-0003"
 		err := v.Validate(ctx, intent)
 		if err == nil || !strings.Contains(err.Error(), "inactive") {
 			t.Fatalf("expected inactive-counterparty error, got %v", err)
