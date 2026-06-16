@@ -1,9 +1,9 @@
 -- Initial projection schema for accounting.LedgerRepository.
 --
 -- Journal tables are append-only: written once by the JournalPosted handler.
--- Seeded accounts/branches/companies/periods are mutated only by the seeder.
--- Business dates (entry_date, period boundaries) are DATE in the company's
--- timezone; posted_at is a real instant (TIMESTAMPTZ).
+-- Seeded accounts/branches/companies/periods/counterparties are mutated only by
+-- the seeder. Business dates (entry_date, period boundaries) are DATE in the
+-- company's timezone; posted_at is a real instant (TIMESTAMPTZ).
 
 CREATE TABLE accounts (
     code   TEXT PRIMARY KEY,
@@ -35,6 +35,17 @@ CREATE TABLE periods (
     status   TEXT NOT NULL
 );
 
+-- Customer/supplier master data, projected from CounterpartyAdded.
+CREATE TABLE counterparties (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    tax_id      TEXT NOT NULL DEFAULT '',
+    active      BOOLEAN NOT NULL,
+    aliases     TEXT[] NOT NULL DEFAULT '{}',
+    description TEXT NOT NULL DEFAULT ''
+);
+
 -- Per-subject high-water sequence reported by LastSequence, advanced in the
 -- same transaction that inserts the entry so a reader never sees an entry
 -- without its sequence.
@@ -43,25 +54,31 @@ CREATE TABLE subject_offsets (
     last_sequence BIGINT NOT NULL
 );
 
+-- source_kind/source_number record the invoice or receipt the entry came from.
 CREATE TABLE journal_entries (
-    id          TEXT PRIMARY KEY,
-    sequence    BIGINT NOT NULL UNIQUE,
-    entry_date  DATE NOT NULL,
-    period_id   TEXT NOT NULL,
-    currency    TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    posted_at   TIMESTAMPTZ NOT NULL
+    id            TEXT PRIMARY KEY,
+    sequence      BIGINT NOT NULL UNIQUE,
+    entry_date    DATE NOT NULL,
+    period_id     TEXT NOT NULL,
+    currency      TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    posted_at     TIMESTAMPTZ NOT NULL,
+    source_kind   TEXT NOT NULL DEFAULT '',
+    source_number TEXT NOT NULL DEFAULT ''
 );
 
+-- counterparty_id attributes a line to a customer/supplier (AR/AP aging); empty
+-- on cash/tax/internal lines.
 CREATE TABLE journal_lines (
-    entry_id     TEXT   NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
-    line_no      INT    NOT NULL,
-    account_code TEXT   NOT NULL,
-    side         TEXT   NOT NULL,
-    amount       BIGINT NOT NULL,
-    memo         TEXT   NOT NULL DEFAULT '',
-    branch_id    TEXT   NOT NULL DEFAULT '',
-    tags         JSONB,
+    entry_id        TEXT   NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+    line_no         INT    NOT NULL,
+    account_code    TEXT   NOT NULL,
+    side            TEXT   NOT NULL,
+    amount          BIGINT NOT NULL,
+    memo            TEXT   NOT NULL DEFAULT '',
+    branch_id       TEXT   NOT NULL DEFAULT '',
+    tags            JSONB,
+    counterparty_id TEXT   NOT NULL DEFAULT '',
     PRIMARY KEY (entry_id, line_no)
 );
 
