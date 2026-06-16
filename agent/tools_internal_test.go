@@ -50,7 +50,7 @@ func TestFindCounterpartiesHandler(t *testing.T) {
 	for _, c := range []accounting.Counterparty{
 		{ID: "CP-0001", Name: "台積電", Kind: accounting.CounterpartyCustomer, TaxID: "22099131", Active: true, Aliases: []string{"TSMC"}},
 		{ID: "CP-0002", Name: "中華電信", Kind: accounting.CounterpartySupplier, Active: true},
-		{ID: "CP-0099", Name: "舊廠商", Kind: accounting.CounterpartySupplier, Active: false},
+		{ID: "CP-0003", Name: "舊廠商", Kind: accounting.CounterpartySupplier, Active: false},
 	} {
 		if err := repo.PutCounterparty(ctx, c); err != nil {
 			t.Fatalf("seed counterparty: %v", err)
@@ -83,7 +83,7 @@ func TestFindCounterpartiesHandler(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(out, "disabled") || !strings.Contains(out, "CP-0099") {
+		if !strings.Contains(out, "disabled") || !strings.Contains(out, "CP-0003") {
 			t.Errorf("inactive counterparty should be flagged disabled:\n%s", out)
 		}
 	})
