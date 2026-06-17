@@ -18,6 +18,7 @@ type command struct {
 // handleCommand to expose a new command.
 var commands = []command{
 	{name: "branch", usage: "/branch [id]", desc: "switch branch by id, or open a picker with no id"},
+	{name: "counterparties", usage: "/counterparties [add]", desc: "list counterparties, or open the add form (alias /cp)"},
 	{name: "help", usage: "/help", desc: "show this help"},
 }
 
@@ -36,6 +37,8 @@ func (m model) handleCommand(input string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "branch":
 		return m.cmdBranch(fields[1:])
+	case "counterparties", "cp":
+		return m.cmdCounterparties(fields[1:])
 	default:
 		m.appendLine(line{kind: lineSystem, text: fmt.Sprintf("unknown command %q — type /help", "/"+fields[0])})
 		return m, nil

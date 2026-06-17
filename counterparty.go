@@ -1,6 +1,7 @@
 package accounting
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -15,9 +16,10 @@ const (
 )
 
 // Counterparty is a customer or supplier the ledger transacts with. ID is
-// producer-assigned (CP-0001); TaxID is the Taiwan 統一編號. Inactive
-// counterparties cannot be referenced by new postings. Aliases enrich lexical
-// lookup and carry no posting invariant.
+// producer-assigned (CP-0001); TaxID is the jurisdiction's tax registration
+// number, stored verbatim with no format check. Inactive counterparties cannot
+// be referenced by new postings. Aliases enrich lexical lookup and carry no
+// posting invariant.
 type Counterparty struct {
 	ID          string           `json:"id" yaml:"id"`
 	Name        string           `json:"name" yaml:"name"`
@@ -31,6 +33,19 @@ type Counterparty struct {
 // FormatCounterpartyID formats a per-subject counter into the canonical Counterparty.ID.
 func FormatCounterpartyID(seq uint64) string {
 	return fmt.Sprintf("CP-%04d", seq)
+}
+
+// Validate reports whether Name is present and Kind is known; ID and TaxID are not checked.
+func (c Counterparty) Validate() error {
+	if strings.TrimSpace(c.Name) == "" {
+		return errors.New("accounting: counterparty needs a name")
+	}
+	switch c.Kind {
+	case CounterpartyCustomer, CounterpartySupplier, CounterpartyBoth:
+		return nil
+	default:
+		return fmt.Errorf("accounting: counterparty %q has unknown kind %q", c.Name, c.Kind)
+	}
 }
 
 // CounterpartyMatch scores how exactly query identifies c for lexical lookup; a

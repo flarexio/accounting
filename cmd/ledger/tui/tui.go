@@ -30,6 +30,12 @@ type AccountLookup interface {
 	LookupAccount(ctx context.Context, code string) (accounting.Account, bool, error)
 }
 
+// CounterpartyAdmin is implemented by Sessions that can list and register counterparties.
+type CounterpartyAdmin interface {
+	Counterparties(ctx context.Context) ([]accounting.Counterparty, error)
+	AddCounterparty(ctx context.Context, draft accounting.Counterparty) (accounting.Counterparty, error)
+}
+
 // Outcome is the non-event summary of a completed turn.
 type Outcome struct {
 	Turns   int
