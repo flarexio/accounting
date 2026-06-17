@@ -11,6 +11,8 @@ import (
 
 var errNoOptions = errors.New("tui: no agent/scenario options to choose from")
 
+var errNoCounterpartyAdmin = errors.New("tui: this branch cannot manage counterparties")
+
 type eventMsg llm.CycleEvent
 
 type turnDoneMsg struct {

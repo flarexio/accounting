@@ -124,6 +124,7 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 					Recent:    bookkeeper.NewRecentEntries(5),
 				},
 				repo: repo,
+				bus:  bus,
 			}, nil
 		},
 	}
@@ -132,6 +133,7 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 type bookSession struct {
 	agent bookkeeper.Bookkeeper
 	repo  accounting.LedgerRepository
+	bus   bookkeeping.EventBus
 }
 
 func (s *bookSession) LookupEntry(ctx context.Context, entryID string) (accounting.JournalEntry, bool, error) {
@@ -140,6 +142,22 @@ func (s *bookSession) LookupEntry(ctx context.Context, entryID string) (accounti
 
 func (s *bookSession) LookupAccount(ctx context.Context, code string) (accounting.Account, bool, error) {
 	return s.repo.Account(ctx, code)
+}
+
+func (s *bookSession) Counterparties(ctx context.Context) ([]accounting.Counterparty, error) {
+	return s.repo.Counterparties(ctx)
+}
+
+func (s *bookSession) AddCounterparty(ctx context.Context, draft accounting.Counterparty) (accounting.Counterparty, error) {
+	cp, err := bookkeeping.AddCounterparty{Repo: s.repo, Publisher: s.bus}.Execute(ctx, draft)
+	if err != nil {
+		return accounting.Counterparty{}, err
+	}
+	// CatchUp so the new row is queryable in this session before returning.
+	if err := s.bus.CatchUp(ctx); err != nil {
+		return accounting.Counterparty{}, fmt.Errorf("counterparty %s registered but projection lagged: %w", cp.ID, err)
+	}
+	return cp, nil
 }
 
 func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSink) (tui.Outcome, error) {

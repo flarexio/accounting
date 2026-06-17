@@ -52,6 +52,9 @@ type model struct {
 	picking bool // the /branch picker overlay is open
 	cursor  int  // highlighted option while picking
 
+	adding bool   // the /counterparties add form overlay is open
+	form   cpForm // field state while adding
+
 	session Session
 	label   string
 
@@ -128,6 +131,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case turnDoneMsg:
 		return m.finishTurn(msg)
 
+	case cpAddedMsg:
+		return m.finishCounterparty(msg)
+
 	case spinner.TickMsg:
 		if !m.running {
 			return m, nil
@@ -155,6 +161,9 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.picking {
 		return m.handlePickerKey(msg)
+	}
+	if m.adding {
+		return m.handleFormKey(msg)
 	}
 
 	switch msg.String() {
@@ -460,6 +469,8 @@ func (m model) View() tea.View {
 		content = "Connecting to ledger..."
 	case m.picking:
 		content = m.branchPickerView()
+	case m.adding:
+		content = m.counterpartyFormView()
 	default:
 		content = m.chatView()
 	}
