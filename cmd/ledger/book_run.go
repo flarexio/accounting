@@ -123,7 +123,9 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		defer recorder.Close()
 	}
 
-	bk := agent.Bookkeeper{
+	prov := dataset.Provenance{TeacherModel: llmCfg.Model, PromptVersion: agent.PromptVersion}
+
+	agent := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,
 		Publisher: bus,
@@ -131,9 +133,8 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Renderer:  &renderer,
 	}
 
-	res, runErr := bk.Book(ctx, request)
+	res, runErr := agent.Book(ctx, request)
 	if runErr == nil {
-		prov := dataset.Provenance{TeacherModel: llmCfg.Model, PromptVersion: agent.PromptVersion}
 		if err := recorder.Record(dataset.FromResult(request, res, prov, time.Now())); err != nil {
 			return fmt.Errorf("book-run: dataset capture: %w", err)
 		}
