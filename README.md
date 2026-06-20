@@ -191,6 +191,44 @@ ledger bench \
 
 `--suite` and `--model` accept repeated flags, comma-separated values, and glob patterns. The runner reuses `llm.api_key` and `llm.base_url` from `config.yaml`; pass `--no-vector-search` to skip the chromem-go account searcher.
 
+## Distillation Dataset
+
+The TUI can capture each bookkeeping run as a training example, so a strong teacher model's reasoning can later be distilled into a smaller local student (e.g. a quantized Qwen). Capture is opt-in: set `llm.dataset_path` to a JSONL file.
+
+```yaml
+llm:
+  model: gpt-5.5                                  # the teacher recorded as provenance
+  dataset_path: /home/me/.flarex/accounting/corpus.jsonl
+```
+
+Then use the TUI as usual; every clean run appends one record:
+
+```bash
+ledger tui
+# each successful request -> one JSON line in corpus.jsonl
+```
+
+Only clean runs are kept — a run whose final intent validated and committed, or that cleanly rejected. Runs that hit an error abort and are dropped, so the domain validator and double-entry balance act as a free rejection-sampling filter on the corpus. The path's directory must already exist (the recorder creates the file, not parent directories); point it outside the repo to keep training data out of version control.
+
+Each line is one `dataset.Record`:
+
+```jsonc
+{
+  "schema_version": "1",
+  "recorded_at": "2026-06-20T08:30:00Z",
+  "provenance": { "teacher_model": "gpt-5.5", "prompt_version": "v1" },
+  "request":    "付這個月房租 35000，從銀行轉帳",
+  "trajectory": [ /* the reason -> tool -> observe llm.CycleEvents */ ],
+  "intent":     { /* the final bookkeeping.Intent the teacher committed */ },
+  "entry_ids":  [ "JE-0042" ],
+  "turns": 2
+}
+```
+
+`trajectory` keeps the full loop (including tool calls and their results), so the same corpus can be formatted downstream as either a tool-calling or an intent-only training set. `provenance` is curation metadata, not a model input: filter on it so records from a changed prompt or model never mix, then drop it before formatting. Bump `agent.PromptVersion` whenever the prompt or `Intent` schema changes.
+
+This repository only *captures* the corpus. Fine-tuning is out of band: convert the records to a chat `messages` JSONL (reconstruct the teacher's system context per `prompt_version`) and train with the usual tools (Hugging Face `datasets`, Unsloth, QLoRA).
+
 ## Tests
 
 Run the full suite:
