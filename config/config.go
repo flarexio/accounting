@@ -52,6 +52,9 @@ type LLM struct {
 	// turns that pass tools. Set true for llama.cpp-style servers whose
 	// grammar engine enforces response_format at the sampler.
 	DisableStrictSchemaWithTools bool `yaml:"disable_strict_schema_with_tools"`
+	// DatasetPath, when set, appends each clean bookkeeping run to this JSONL
+	// file as a distillation training record. Empty disables capture.
+	DatasetPath string `yaml:"dataset_path"`
 }
 
 // Embedding holds the embedding model used by the postgres adapter to populate

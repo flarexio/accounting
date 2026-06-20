@@ -12,6 +12,11 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
+// PromptVersion identifies the prompt-and-Intent-schema contract a trajectory
+// was produced under; bump it whenever the prompt or Intent schema changes so
+// distillation records from different contracts stay distinguishable.
+const PromptVersion = "v1"
+
 // PromptRenderer builds provider-neutral messages for a bookkeeping turn. It
 // holds chart snapshots so Render is free of repository I/O on the hot path.
 // OperatorBranchID names the branch the operator is currently working from;
