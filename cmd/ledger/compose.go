@@ -124,10 +124,10 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 // recall guidance is derived from the tool set at render time, so it needs no
 // flag here -- wiring the recent_entries tool (via the agent's RecentEntries
 // buffer) is what turns it on.
-func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM, operatorBranchID string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
+func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmCfg config.LLM, operatorBranchID string) (llm.ReasoningEngine[bookkeeping.Intent], agent.PromptRenderer, error) {
 	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+		return nil, agent.PromptRenderer{}, fmt.Errorf("book-run: openai engine: %w", err)
 	}
 	renderer.OperatorBranchID = operatorBranchID
 	adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
@@ -139,9 +139,9 @@ func buildBookEngine(ctx context.Context, repo accounting.LedgerRepository, llmC
 		Renderer:                     renderer,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("book-run: openai engine: %w", err)
+		return nil, agent.PromptRenderer{}, fmt.Errorf("book-run: openai engine: %w", err)
 	}
-	return adapter, nil
+	return adapter, renderer, nil
 }
 
 // extractFeedback collects validation/execution-error content for the CLI report.

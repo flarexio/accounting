@@ -17,7 +17,8 @@ import (
 
 func sampleResult() agent.Result {
 	return agent.Result{
-		Intent: bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Final: true},
+		SystemPrompt: "Company: Demo\nActive chart of accounts:\n...",
+		Intent:       bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Final: true},
 		Entries: []accounting.JournalEntry{
 			{ID: "JE-0001"},
 			{ID: "JE-0002"},
@@ -53,6 +54,9 @@ func TestFromResult(t *testing.T) {
 	}
 	if len(rec.Trajectory) != 2 {
 		t.Errorf("Trajectory length = %d, want 2", len(rec.Trajectory))
+	}
+	if rec.SystemPrompt != "Company: Demo\nActive chart of accounts:\n..." {
+		t.Errorf("SystemPrompt = %q, want the captured system message", rec.SystemPrompt)
 	}
 }
 

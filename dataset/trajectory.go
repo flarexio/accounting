@@ -32,6 +32,7 @@ type Record struct {
 	SchemaVersion string             `json:"schema_version"`
 	RecordedAt    time.Time          `json:"recorded_at"`
 	Provenance    Provenance         `json:"provenance"`
+	SystemPrompt  string             `json:"system_prompt"`
 	Request       string             `json:"request"`
 	Trajectory    []llm.CycleEvent   `json:"trajectory"`
 	Intent        bookkeeping.Intent `json:"intent"`
@@ -49,6 +50,7 @@ func FromResult(request string, res agent.Result, prov Provenance, now time.Time
 		SchemaVersion: SchemaVersion,
 		RecordedAt:    now.UTC(),
 		Provenance:    prov,
+		SystemPrompt:  res.SystemPrompt,
 		Request:       request,
 		Trajectory:    res.Events,
 		Intent:        res.Intent,

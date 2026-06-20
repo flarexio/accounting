@@ -143,12 +143,13 @@ func runBench(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 
 func benchEngineFactory() benchmark.EngineFactory {
 	return func(ctx context.Context, repo accounting.LedgerRepository, m benchmark.ModelConfig) (llm.ReasoningEngine[bookkeeping.Intent], error) {
-		return buildBookEngine(ctx, repo, config.LLM{
+		engine, _, err := buildBookEngine(ctx, repo, config.LLM{
 			Model:                        m.Model,
 			APIKey:                       m.APIKey,
 			BaseURL:                      m.BaseURL,
 			DisableStrictSchemaWithTools: m.DisableStrictSchemaWithTools,
 		}, "")
+		return engine, err
 	}
 }
 

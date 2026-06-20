@@ -34,15 +34,20 @@ type Bookkeeper struct {
 	// entries are recorded into it and the recall tools (recent_entries,
 	// get_entry) read it. Nil disables recall (e.g. one-shot book-run).
 	Recent *RecentEntries
+	// Renderer, when set, supplies the system prompt the engine conditions on;
+	// Book captures it into Result.SystemPrompt so a distillation record is
+	// self-contained. Nil omits it.
+	Renderer *PromptRenderer
 }
 
 // Result is the outcome of one bookkeeping cycle.
 type Result struct {
-	Intent      bookkeeping.Intent
-	Entries     []accounting.JournalEntry // every committed entry, in order; empty on reject/abort
-	Observation llm.Observation
-	Turns       int
-	Events      []llm.CycleEvent
+	Intent       bookkeeping.Intent
+	Entries      []accounting.JournalEntry // every committed entry, in order; empty on reject/abort
+	Observation  llm.Observation
+	Turns        int
+	Events       []llm.CycleEvent
+	SystemPrompt string // the rendered system message the engine conditioned on, when a Renderer is set
 }
 
 // Book runs the loop for request, routing whichever Intent the model proposes through the Registry.
@@ -116,12 +121,18 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		}
 	}
 
+	var systemPrompt string
+	if a.Renderer != nil {
+		systemPrompt = a.Renderer.systemPrompt(a.Recent != nil)
+	}
+
 	return Result{
-		Intent:      out.Reasoning.Intent,
-		Entries:     committed,
-		Observation: out.Observation,
-		Turns:       out.Turns,
-		Events:      out.Events,
+		Intent:       out.Reasoning.Intent,
+		Entries:      committed,
+		Observation:  out.Observation,
+		Turns:        out.Turns,
+		Events:       out.Events,
+		SystemPrompt: systemPrompt,
 	}, err
 }
 

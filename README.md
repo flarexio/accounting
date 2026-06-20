@@ -216,18 +216,19 @@ Each line is one `dataset.Record`:
 {
   "schema_version": "1",
   "recorded_at": "2026-06-20T08:30:00Z",
-  "provenance": { "teacher_model": "gpt-5.5", "prompt_version": "v1" },
-  "request":    "付這個月房租 35000，從銀行轉帳",
-  "trajectory": [ /* the reason -> tool -> observe llm.CycleEvents */ ],
-  "intent":     { /* the final bookkeeping.Intent the teacher committed */ },
-  "entry_ids":  [ "JE-0042" ],
+  "provenance":    { "teacher_model": "gpt-5.5", "prompt_version": "v1" },
+  "system_prompt": "Company: …\nActive chart of accounts:\n…",
+  "request":       "付這個月房租 35000，從銀行轉帳",
+  "trajectory":    [ /* the reason -> tool -> observe llm.CycleEvents */ ],
+  "intent":        { /* the final bookkeeping.Intent the teacher committed */ },
+  "entry_ids":     [ "JE-0042" ],
   "turns": 2
 }
 ```
 
-`trajectory` keeps the full loop (including tool calls and their results), so the same corpus can be formatted downstream as either a tool-calling or an intent-only training set. `provenance` is curation metadata, not a model input: filter on it so records from a changed prompt or model never mix, then drop it before formatting. Bump `agent.PromptVersion` whenever the prompt or `Intent` schema changes.
+The record is self-contained: `system_prompt` is the rendered tenant context (chart/periods/branches/policy) the teacher actually conditioned on, captured at run time — not reconstructed later, since that context is mutable and `prompt_version` only versions the prompt template, not its data. `trajectory` keeps the full loop (including tool calls and their results), so the same corpus can be formatted downstream as either a tool-calling or an intent-only training set. `provenance` is curation metadata, not a model input: filter on it so records from a changed prompt or model never mix, then drop it before formatting. Bump `agent.PromptVersion` whenever the prompt or `Intent` schema changes.
 
-This repository only *captures* the corpus. Fine-tuning is out of band: convert the records to a chat `messages` JSONL (reconstruct the teacher's system context per `prompt_version`) and train with the usual tools (Hugging Face `datasets`, Unsloth, QLoRA).
+This repository only *captures* the corpus. Fine-tuning is out of band: map each record to a chat `messages` JSONL (`system_prompt` → `system`, `request` → `user`, `intent` → `assistant`) and train with the usual tools (Hugging Face `datasets`, Unsloth, QLoRA).
 
 ## Tests
 

@@ -18,8 +18,8 @@ import (
 )
 
 type bookRunOutput struct {
-	Request string             `json:"request"`
-	Turns   int                `json:"turns"`
+	Request     string                    `json:"request"`
+	Turns       int                       `json:"turns"`
 	Intent      bookkeeping.Intent        `json:"intent"`
 	Entries     []accounting.JournalEntry `json:"entries"`
 	Observation llm.Observation           `json:"observation"`
@@ -103,7 +103,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, repo, llmCfg, "")
+	engine, _, err := buildBookEngine(ctx, repo, llmCfg, "")
 	if err != nil {
 		return err
 	}
