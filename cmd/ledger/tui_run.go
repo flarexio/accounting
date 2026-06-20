@@ -128,7 +128,12 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 		Label: branch.Name,
 		Hint:  branch.ID,
 		Start: func(ctx context.Context) (tui.Session, error) {
-			engine, renderer, err := buildBookEngine(ctx, repo, comp.llmCfg, branch.ID)
+			renderer, err := bookkeeper.NewPromptRenderer(ctx, repo)
+			if err != nil {
+				return nil, err
+			}
+			renderer.OperatorBranchID = branch.ID
+			engine, err := buildBookEngine(renderer, comp.llmCfg)
 			if err != nil {
 				return nil, err
 			}
@@ -186,9 +191,7 @@ func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSi
 	agent := s.agent
 	agent.Sink = sink
 	res, err := agent.Book(ctx, request)
-	// A clean run means the teacher's final intent validated and committed (or
-	// cleanly rejected): capture it as a distillation record. Failed runs aborted
-	// and are dropped. A record-write failure must not break the user's session.
+	// Capture a clean run (committed or cleanly rejected); a write failure must not break the session.
 	var captureNote string
 	if err == nil {
 		if rErr := s.recorder.Record(dataset.FromResult(request, res, s.provenance, time.Now())); rErr != nil {

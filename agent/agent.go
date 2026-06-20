@@ -34,9 +34,7 @@ type Bookkeeper struct {
 	// entries are recorded into it and the recall tools (recent_entries,
 	// get_entry) read it. Nil disables recall (e.g. one-shot book-run).
 	Recent *RecentEntries
-	// Renderer, when set, supplies the system prompt the engine conditions on;
-	// Book captures it into Result.SystemPrompt so a distillation record is
-	// self-contained. Nil omits it.
+	// Renderer, when set, captures the system prompt into Result.SystemPrompt.
 	Renderer *PromptRenderer
 }
 
@@ -47,7 +45,7 @@ type Result struct {
 	Observation  llm.Observation
 	Turns        int
 	Events       []llm.CycleEvent
-	SystemPrompt string // the rendered system message the engine conditioned on, when a Renderer is set
+	SystemPrompt string // the system message the engine conditioned on, when a Renderer is set
 }
 
 // Book runs the loop for request, routing whichever Intent the model proposes through the Registry.

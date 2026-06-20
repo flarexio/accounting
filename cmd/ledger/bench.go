@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/accounting"
+	"github.com/flarexio/accounting/agent"
 	"github.com/flarexio/accounting/benchmark"
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/config"
@@ -143,13 +144,16 @@ func runBench(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 
 func benchEngineFactory() benchmark.EngineFactory {
 	return func(ctx context.Context, repo accounting.LedgerRepository, m benchmark.ModelConfig) (llm.ReasoningEngine[bookkeeping.Intent], error) {
-		engine, _, err := buildBookEngine(ctx, repo, config.LLM{
+		renderer, err := agent.NewPromptRenderer(ctx, repo)
+		if err != nil {
+			return nil, err
+		}
+		return buildBookEngine(renderer, config.LLM{
 			Model:                        m.Model,
 			APIKey:                       m.APIKey,
 			BaseURL:                      m.BaseURL,
 			DisableStrictSchemaWithTools: m.DisableStrictSchemaWithTools,
-		}, "")
-		return engine, err
+		})
 	}
 }
 

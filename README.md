@@ -193,7 +193,7 @@ ledger bench \
 
 ## Distillation Dataset
 
-The TUI can capture each bookkeeping run as a training example, so a strong teacher model's reasoning can later be distilled into a smaller local student (e.g. a quantized Qwen). Capture is opt-in: set `llm.dataset_path` to a JSONL file.
+`ledger tui` and `ledger book-run` can capture each bookkeeping run as a training example, so a strong teacher model's reasoning can later be distilled into a smaller local student (e.g. a quantized Qwen). Capture is opt-in: set `llm.dataset_path` to a JSONL file.
 
 ```yaml
 llm:
@@ -201,11 +201,14 @@ llm:
   dataset_path: /home/me/.flarex/accounting/corpus.jsonl
 ```
 
-Then use the TUI as usual; every clean run appends one record:
+Every clean run then appends one record. Use the TUI interactively, or script `book-run` to batch-generate over a request list:
 
 ```bash
-ledger tui
-# each successful request -> one JSON line in corpus.jsonl
+ledger tui                                        # each successful request -> one line
+
+while read -r req; do
+  ledger book-run --request "$req" >/dev/null
+done < requests.txt                               # one line per clean run
 ```
 
 Only clean runs are kept — a run whose final intent validated and committed, or that cleanly rejected. Runs that hit an error abort and are dropped, so the domain validator and double-entry balance act as a free rejection-sampling filter on the corpus. The path's directory must already exist (the recorder creates the file, not parent directories); point it outside the repo to keep training data out of version control.
