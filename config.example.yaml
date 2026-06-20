@@ -31,6 +31,9 @@ llm:
   # response_format at the sampler -- strict json_schema would otherwise block
   # native tool_calls. Leave false (default) for OpenAI and vLLM.
   disable_strict_schema_with_tools: false
+  # Append each clean TUI bookkeeping run to this JSONL file as a distillation
+  # training record (request + full trajectory + final intent). Omit to disable.
+  dataset_path: ./distill/corpus.jsonl
 
 embedding:
   # Used only by the postgres adapter to populate the accounts.embedding column

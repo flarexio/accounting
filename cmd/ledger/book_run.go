@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -14,12 +15,13 @@ import (
 	"github.com/flarexio/accounting/agent"
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/config"
+	"github.com/flarexio/accounting/dataset"
 	"github.com/flarexio/stoa/llm"
 )
 
 type bookRunOutput struct {
-	Request string             `json:"request"`
-	Turns   int                `json:"turns"`
+	Request     string                    `json:"request"`
+	Turns       int                       `json:"turns"`
 	Intent      bookkeeping.Intent        `json:"intent"`
 	Entries     []accounting.JournalEntry `json:"entries"`
 	Observation llm.Observation           `json:"observation"`
@@ -103,18 +105,40 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	defer bus.Close()
 
-	engine, err := buildBookEngine(ctx, repo, llmCfg, "")
+	renderer, err := agent.NewPromptRenderer(ctx, repo)
 	if err != nil {
 		return err
 	}
+	engine, err := buildBookEngine(renderer, llmCfg)
+	if err != nil {
+		return err
+	}
+
+	var recorder *dataset.Recorder
+	if path := llmCfg.DatasetPath; path != "" {
+		recorder, err = dataset.NewFileRecorder(path)
+		if err != nil {
+			return err
+		}
+		defer recorder.Close()
+	}
+
+	prov := dataset.Provenance{TeacherModel: llmCfg.Model, PromptVersion: agent.PromptVersion}
+
 	agent := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,
 		Publisher: bus,
 		MaxTurns:  maxTurns,
+		Renderer:  &renderer,
 	}
 
 	res, runErr := agent.Book(ctx, request)
+	if runErr == nil {
+		if err := recorder.Record(dataset.FromResult(request, res, prov, time.Now())); err != nil {
+			return fmt.Errorf("book-run: dataset capture: %w", err)
+		}
+	}
 
 	out := bookRunOutput{
 		Request:     request,

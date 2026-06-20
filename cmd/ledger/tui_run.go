@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/flarexio/accounting/bookkeeping"
 	"github.com/flarexio/accounting/cmd/ledger/tui"
 	"github.com/flarexio/accounting/config"
+	"github.com/flarexio/accounting/dataset"
 	"github.com/flarexio/stoa/harness/loop"
 
 	bookkeeper "github.com/flarexio/accounting/agent"
@@ -60,6 +62,19 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 		comp.llmCfg.Model = model
 	}
 
+	if path := comp.llmCfg.DatasetPath; path != "" {
+		recorder, err := dataset.NewFileRecorder(path)
+		if err != nil {
+			return fmt.Errorf("tui: %w", err)
+		}
+		defer recorder.Close()
+		comp.recorder = recorder
+		comp.provenance = dataset.Provenance{
+			TeacherModel:  comp.llmCfg.Model,
+			PromptVersion: bookkeeper.PromptVersion,
+		}
+	}
+
 	repo, repoCloser, err := buildRepository(ctx, comp.cfg.Persistence, comp.cfg.Embedding)
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
@@ -98,9 +113,11 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 
 // tuiComposer builds the bookkeeper session from config and CLI flags.
 type tuiComposer struct {
-	cfg      *config.Config
-	llmCfg   config.LLM
-	maxTurns int
+	cfg        *config.Config
+	llmCfg     config.LLM
+	maxTurns   int
+	recorder   *dataset.Recorder
+	provenance dataset.Provenance
 }
 
 // bookOption is one branch-scoped bookkeeper session. The repo and bus live
@@ -111,7 +128,12 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 		Label: branch.Name,
 		Hint:  branch.ID,
 		Start: func(ctx context.Context) (tui.Session, error) {
-			engine, err := buildBookEngine(ctx, repo, comp.llmCfg, branch.ID)
+			renderer, err := bookkeeper.NewPromptRenderer(ctx, repo)
+			if err != nil {
+				return nil, err
+			}
+			renderer.OperatorBranchID = branch.ID
+			engine, err := buildBookEngine(renderer, comp.llmCfg)
 			if err != nil {
 				return nil, err
 			}
@@ -122,18 +144,23 @@ func (comp tuiComposer) bookOption(repo accounting.LedgerRepository, bus bookkee
 					Publisher: bus,
 					MaxTurns:  comp.maxTurns,
 					Recent:    bookkeeper.NewRecentEntries(5),
+					Renderer:  &renderer,
 				},
-				repo: repo,
-				bus:  bus,
+				repo:       repo,
+				bus:        bus,
+				recorder:   comp.recorder,
+				provenance: comp.provenance,
 			}, nil
 		},
 	}
 }
 
 type bookSession struct {
-	agent bookkeeper.Bookkeeper
-	repo  accounting.LedgerRepository
-	bus   bookkeeping.EventBus
+	agent      bookkeeper.Bookkeeper
+	repo       accounting.LedgerRepository
+	bus        bookkeeping.EventBus
+	recorder   *dataset.Recorder
+	provenance dataset.Provenance
 }
 
 func (s *bookSession) LookupEntry(ctx context.Context, entryID string) (accounting.JournalEntry, bool, error) {
@@ -164,6 +191,13 @@ func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSi
 	agent := s.agent
 	agent.Sink = sink
 	res, err := agent.Book(ctx, request)
+	// Capture a clean run (committed or cleanly rejected); a write failure must not break the session.
+	var captureNote string
+	if err == nil {
+		if rErr := s.recorder.Record(dataset.FromResult(request, res, s.provenance, time.Now())); rErr != nil {
+			captureNote = fmt.Sprintf(" (dataset capture failed: %v)", rErr)
+		}
+	}
 	out := tui.Outcome{Turns: res.Turns}
 	switch len(res.Entries) {
 	case 0:
@@ -176,6 +210,7 @@ func (s *bookSession) Run(ctx context.Context, request string, sink loop.EventSi
 		}
 		out.Summary = fmt.Sprintf("posted %d entries: %s", len(ids), strings.Join(ids, ", "))
 	}
+	out.Summary += captureNote
 	return out, err
 }
 
